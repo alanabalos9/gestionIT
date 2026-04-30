@@ -2,6 +2,7 @@
 session_start();
 require_once 'db.php';
 
+// Redirigir si no hay sesión iniciada[cite: 11]
 if (!isset($_SESSION['usuario'])) {
     header("Location: index.php");
     exit();
@@ -9,10 +10,9 @@ if (!isset($_SESSION['usuario'])) {
 
 $usuario_id = $_SESSION['usuario_id'];
 $rol = $_SESSION['rol'];
-
 $filtro_estado = $_GET['estado'] ?? '';
 
-// Consulta de Tickets: Se agregan campos de mantenimiento y resolución
+// --- CONSULTA DE TICKETS ---
 $sql = ($rol == 'administrador' || $rol == 'tecnico') 
     ? "SELECT t.id, t.asunto, t.descripcion, t.prioridad, t.estado, t.fecha_creacion, 
               t.fecha_mantenimiento, t.detalle_resolucion,
@@ -41,11 +41,13 @@ if (!empty($filtro_estado)) {
 $stmt->execute();
 $resultado = $stmt->get_result();
 
-// Lista de técnicos para el modal
+// --- LISTA DE TÉCNICOS ---
 $tecnicos = [];
 if ($rol == 'administrador' || $rol == 'tecnico') {
-    $res_tec = $conexion->query("SELECT id, nombre_completo FROM usuarios WHERE rol IN ('admin', 'tecnico')");
-    while($t = $res_tec->fetch_assoc()) { $tecnicos[] = $t; }
+    $res_tec = $conexion->query("SELECT id, nombre_completo FROM usuarios WHERE rol IN ('administrador', 'tecnico')");
+    while($t = $res_tec->fetch_assoc()) { 
+        $tecnicos[] = $t; 
+    }
 }
 ?>
 
@@ -76,7 +78,6 @@ if ($rol == 'administrador' || $rol == 'tecnico') {
             font-family: 'Inter', sans-serif;
             color: var(--text-main);
             min-height: 100vh;
-            margin: 0;
             background-image: 
                 linear-gradient(rgba(56, 189, 248, 0.02) 1px, transparent 1px), 
                 linear-gradient(90deg, rgba(56, 189, 248, 0.02) 1px, transparent 1px);
@@ -91,17 +92,13 @@ if ($rol == 'administrador' || $rol == 'tecnico') {
         }
 
         .nav-link-neo {
-            color: white;
-            text-decoration: none;
-            font-weight: 600;
+            color: white; text-decoration: none; font-weight: 600;
             display: flex; align-items: center; gap: 8px;
             transition: 0.3s; padding: 8px 15px; border-radius: 10px; font-size: 0.95rem;
         }
-
         .nav-link-neo:hover { background: var(--accent-soft); color: var(--accent); }
 
-        .main-content { padding: 40px; animation: fadeInPage 0.6s ease-out; }
-        @keyframes fadeInPage { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .main-content { padding: 40px; }
 
         .ticket-card {
             background: var(--card-dark);
@@ -110,9 +107,7 @@ if ($rol == 'administrador' || $rol == 'tecnico') {
             padding: 25px;
             transition: 0.3s;
             height: 100%;
-            position: relative;
         }
-
         .ticket-card:hover { border-color: var(--accent); transform: translateY(-5px); }
 
         .priority-badge { font-size: 0.7rem; font-weight: 800; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; }
@@ -145,40 +140,22 @@ if ($rol == 'administrador' || $rol == 'tecnico') {
             border-radius: 12px;
             font-size: 0.65rem;
             font-weight: 700;
-            text-transform: uppercase;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 5px;
+            display: flex; flex-direction: column; align-items: center; gap: 5px;
             transition: 0.3s;
         }
-
         .btn-neo-action i { font-size: 1.2rem; }
         .btn-neo-action:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
-        
-        .mante-info {
-            background: rgba(251, 191, 36, 0.05);
-            border: 1px dashed rgba(251, 191, 36, 0.3);
-            color: #fbbf24;
-            padding: 8px;
-            border-radius: 10px;
-            font-size: 0.75rem;
-            margin-bottom: 10px;
-        }
     </style>
 </head>
 <body>
 
     <nav class="neo-navbar d-flex justify-content-between align-items-center sticky-top">
         <div class="d-flex align-items-center gap-3">
-            <img src="img/logo_neoadmin.png" alt="Logo" style="width:45px">
             <span style="font-family: 'Orbitron'; font-size: 1.2rem; color: var(--accent);">NEO ADMIN</span>
         </div>
-
         <div class="d-flex align-items-center gap-2">
             <a href="dashboard.php" class="nav-link-neo"><i class="bi bi-house-door-fill"></i> Inicio</a>
             <a href="tickets_lista.php" class="nav-link-neo" style="background: var(--accent-soft); color: var(--accent);"><i class="bi bi-headset"></i> Mesa de Ayuda</a>
-            <div class="vr mx-2 opacity-25" style="height: 20px; align-self: center;"></div>
             <a href="logout.php" class="nav-link-neo text-danger"><i class="bi bi-box-arrow-right"></i> Salir</a>
         </div>
     </nav>
@@ -187,7 +164,7 @@ if ($rol == 'administrador' || $rol == 'tecnico') {
         <div class="d-flex justify-content-between align-items-center mb-5">
             <div>
                 <h1 class="fw-bold mb-1" style="font-family: 'Orbitron'; letter-spacing: 1px;">MESA DE AYUDA</h1>
-                <p class="text-secondary mb-0">Gestión de incidentes y requerimientos técnicos.</p>
+                <p class="text-secondary mb-0">Gestión de incidentes técnicos.</p>
             </div>
             <a href="tickets_crear.php" class="btn btn-info fw-bold px-4 py-2" style="border-radius: 12px;">
                 <i class="bi bi-plus-lg me-2"></i>NUEVO TICKET
@@ -199,8 +176,6 @@ if ($rol == 'administrador' || $rol == 'tecnico') {
                 $prio_class = 'prio-baja';
                 if(strtolower($row['prioridad']) == 'alta') $prio_class = 'prio-alta';
                 if(strtolower($row['prioridad']) == 'media') $prio_class = 'prio-media';
-                
-                // Límite de resolución: 24 horas después de la creación
                 $fecha_limite = date('Y-m-d H:i:s', strtotime($row['fecha_creacion'] . ' + 24 hours'));
             ?>
             <div class="col-md-6 col-lg-4">
@@ -217,14 +192,8 @@ if ($rol == 'administrador' || $rol == 'tecnico') {
                     <h5 class="fw-bold mb-2 text-white"><?php echo htmlspecialchars($row['asunto']); ?></h5>
                     <p class="text-secondary small mb-1">Estado: <span class="badge bg-secondary"><?php echo $row['estado']; ?></span></p>
                     <p class="text-secondary small mb-1">Técnico: <span class="text-info"><?php echo $row['tecnico_nombre'] ?? 'Sin asignar'; ?></span></p>
-                    
-                    <?php if (!empty($row['fecha_mantenimiento']) && $row['estado'] == 'Mantenimiento'): ?>
-                        <div class="mante-info">
-                            <i class="bi bi-calendar-event me-1"></i> Programado: <b><?php echo date('d/m/Y', strtotime($row['fecha_mantenimiento'])); ?></b>
-                        </div>
-                    <?php endif; ?>
 
-                    <div class="pt-3 border-top border-white border-opacity-10">
+                    <div class="pt-3 border-top border-white border-opacity-10 mt-3">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <span class="small text-secondary"><i class="bi bi-person-circle me-1"></i> <?php echo $row['solicitante_nombre']; ?></span>
                             <a href="ticket_detalle.php?id=<?php echo $row['id']; ?>" class="text-white-50 small text-decoration-none">Detalles <i class="bi bi-chevron-right"></i></a>
@@ -251,102 +220,95 @@ if ($rol == 'administrador' || $rol == 'tecnico') {
     </main>
 
     <script>
-        // --- LÓGICA DEL TEMPORIZADOR ---
+        // --- TEMPORIZADORES[cite: 11] ---
         function startTimers() {
             const timers = document.querySelectorAll('.timer-display');
             setInterval(() => {
                 const now = new Date().getTime();
                 timers.forEach(timer => {
                     const estado = timer.dataset.estado;
-                    // Si ya está resuelto, detenemos el reloj
                     if(estado === 'Resuelto' || estado === 'No Resuelto') {
                         timer.innerHTML = `<i class="bi bi-check-all"></i> CERRADO`;
                         timer.style.color = "#a3e635";
                         return;
                     }
-
                     const deadline = new Date(timer.dataset.deadline).getTime();
                     const distance = deadline - now;
-
                     if (distance < 0) {
                         timer.innerHTML = "EXPIRADO";
                         timer.style.color = "#f87171";
                     } else {
-                        const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-                        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-                        timer.innerHTML = `<i class="bi bi-clock-history"></i> ${hours}h ${minutes}m ${seconds}s`;
+                        const h = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                        const m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                        const s = Math.floor((distance % (1000 * 60)) / 1000);
+                        timer.innerHTML = `<i class="bi bi-clock-history"></i> ${h}h ${m}m ${s}s`;
                     }
                 });
             }, 1000);
         }
         startTimers();
 
-        // --- ASIGNAR TÉCNICO ---
+        // --- ACCIÓN: ASIGNAR TÉCNICO (ESTILO MEJORADO)[cite: 11] ---
         async function asignarTecnico(id) {
             const { value: tecnicoId } = await Swal.fire({
                 title: 'ASIGNAR TÉCNICO',
-                background: '#1e293b', 
-                color: '#fff',
-                input: 'select',
-                inputOptions: {
-                    <?php foreach($tecnicos as $t): ?>
-                    '<?php echo $t['id']; ?>': '<?php echo addslashes($t['nombre_completo']); ?>',
-                    <?php endforeach; ?>
-                },
-                inputPlaceholder: 'Seleccione un técnico...',
+                background: '#1e293b',
+                color: '#f1f5f9',
+                html: `
+                    <div class="p-2">
+                        <select id="sw-tecnico-select" class="form-select shadow-none" 
+                                style="background-color: #0f172a; color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">
+                            <option value="" disabled selected>Seleccione un técnico...</option>
+                            <?php foreach($tecnicos as $t): ?>
+                                <option value="<?php echo $t['id']; ?>" style="background-color: #1e293b; color: #fff;">
+                                    <?php echo addslashes($t['nombre_completo']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                `,
                 showCancelButton: true,
                 confirmButtonColor: '#38bdf8',
-                cancelButtonColor: '#64748b'
+                confirmButtonText: 'Confirmar',
+                preConfirm: () => {
+                    const val = document.getElementById('sw-tecnico-select').value;
+                    if (!val) Swal.showValidationMessage('Seleccione un técnico');
+                    return val;
+                }
             });
             if (tecnicoId) enviarAccion({ id, tecnico_id: tecnicoId, accion: 'asignar' });
         }
 
-        // --- RESOLVER TICKET (CON DETALLE) ---
         async function resolverTicket(id) {
             const { value: formValues } = await Swal.fire({
-                title: 'RESOLUCIÓN DE TICKET',
-                background: '#1e293b', 
-                color: '#fff',
+                title: 'RESOLUCIÓN',
+                background: '#1e293b', color: '#fff',
                 html: `
-                    <label class="d-block mb-2 text-start small text-secondary">¿Se solucionó el problema?</label>
-                    <select id="sw-estado" class="swal2-input m-0 w-100" style="background: #0f172a; color: white; border: 1px solid var(--glass-border);">
-                        <option value="Resuelto">SÍ, Resuelto</option>
-                        <option value="No Resuelto">NO, Sin resolución</option>
+                    <select id="sw-estado" class="swal2-input m-0 mb-3 w-100" style="background: #0f172a; color: white;">
+                        <option value="Resuelto">Resuelto</option>
+                        <option value="No Resuelto">No Resuelto</option>
                     </select>
-                    <label class="d-block mt-3 mb-2 text-start small text-secondary">Detalle / Motivo:</label>
-                    <textarea id="sw-detalle" class="swal2-textarea m-0 w-100" style="background: #0f172a; color: white; border: 1px solid var(--glass-border);" placeholder="Escriba aquí los detalles técnicos o el por qué no se pudo resolver..."></textarea>
+                    <textarea id="sw-detalle" class="swal2-textarea m-0 w-100" style="background: #0f172a; color: white;" placeholder="Detalles..."></textarea>
                 `,
-                focusConfirm: false,
-                showCancelButton: true,
-                confirmButtonText: 'GUARDAR',
-                confirmButtonColor: '#38bdf8',
-                preConfirm: () => {
-                    const detalle = document.getElementById('sw-detalle').value;
-                    if (!detalle) {
-                        Swal.showValidationMessage('El detalle es obligatorio');
-                    }
-                    return {
-                        estado: document.getElementById('sw-estado').value,
-                        detalle: detalle
-                    }
-                }
+                preConfirm: () => ({
+                    estado: document.getElementById('sw-estado').value,
+                    detalle: document.getElementById('sw-detalle').value
+                })
             });
             if (formValues) enviarAccion({ ...formValues, id, accion: 'resolver' });
         }
 
-        // --- PROGRAMAR MANTENIMIENTO ---
         async function mantenimientoTicket(id) {
             const { value: formValues } = await Swal.fire({
                 title: 'MANTENIMIENTO',
                 background: '#1e293b', color: '#fff',
                 html: `
-                    <input type="date" id="sw-fecha" class="swal2-input" value="<?php echo date('Y-m-d'); ?>">
-                    <textarea id="sw-detalle" class="swal2-textarea" placeholder="Tareas a realizar..."></textarea>
+                    <input type="date" id="sw-fecha" class="swal2-input m-0 mb-3 w-100" value="<?php echo date('Y-m-d'); ?>" style="background: #0f172a; color: white;">
+                    <textarea id="sw-detalle-mante" class="swal2-textarea m-0 w-100" style="background: #0f172a; color: white;" placeholder="Tareas..."></textarea>
                 `,
                 preConfirm: () => ({
                     fecha: document.getElementById('sw-fecha').value,
-                    detalle: document.getElementById('sw-detalle').value,
+                    detalle: document.getElementById('sw-detalle-mante').value,
                     estado: 'Mantenimiento'
                 })
             });
@@ -357,16 +319,10 @@ if ($rol == 'administrador' || $rol == 'tecnico') {
             const formData = new FormData();
             for (let key in datos) { formData.append(key, datos[key]); }
             fetch('tickets_procesar.php', { method: 'POST', body: formData })
-            .then(() => {
-                Swal.fire({ 
-                    icon: 'success', 
-                    title: 'Actualizado', 
-                    background: '#1e293b', 
-                    color: '#fff', 
-                    timer: 1500, 
-                    showConfirmButton: false 
-                })
-                .then(() => location.reload());
+            .then(res => res.json())
+            .then(data => {
+                if(data.status === 'success') location.reload();
+                else Swal.fire({ icon: 'error', title: 'Error', text: data.message, background: '#1e293b', color: '#fff' });
             });
         }
     </script>
