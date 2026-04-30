@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 23-04-2026 a las 04:13:03
+-- Tiempo de generación: 30-04-2026 a las 03:00:45
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
 
@@ -102,9 +102,11 @@ CREATE TABLE `tickets` (
   `descripcion` text NOT NULL,
   `prioridad` enum('Baja','Media','Alta','Urgente') DEFAULT 'Media',
   `estado` enum('Nuevo','En curso','Resuelto','Cerrado') DEFAULT 'Nuevo',
+  `detalle_resolucion` text DEFAULT NULL,
   `solicitante_id` int(11) NOT NULL,
   `tecnico_id` int(11) DEFAULT NULL,
   `fecha_creacion` timestamp NOT NULL DEFAULT current_timestamp(),
+  `fecha_mantenimiento` date DEFAULT NULL,
   `fecha_actualizacion` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -112,12 +114,12 @@ CREATE TABLE `tickets` (
 -- Volcado de datos para la tabla `tickets`
 --
 
-INSERT INTO `tickets` (`id`, `asunto`, `descripcion`, `prioridad`, `estado`, `solicitante_id`, `tecnico_id`, `fecha_creacion`, `fecha_actualizacion`) VALUES
-(1, 'Error en Outlook', 'No puedo enviar correos desde esta mañana, arroja error de servidor.', 'Media', 'Nuevo', 3, NULL, '2026-04-09 10:38:58', '2026-04-09 10:38:58'),
-(3, 'inicio pc', 'No enciende', 'Media', 'Nuevo', 1, NULL, '2026-04-14 14:36:18', '2026-04-14 14:36:18'),
-(4, 'conexion a internet', 'Estoy teniendo incovenientes con la red ', 'Media', 'Nuevo', 1, NULL, '2026-04-14 14:38:56', '2026-04-14 14:38:56'),
-(5, 'falla impresion', 'mi impresora no conecta', 'Media', 'Nuevo', 1, NULL, '2026-04-14 14:42:03', '2026-04-14 14:42:03'),
-(7, 'acceso a carpeta compartida', 'Intento ingresar a la carpeta de Finanzas y me pide una contraseña que no reconozco', 'Media', 'Nuevo', 1, NULL, '2026-04-15 12:46:55', '2026-04-15 12:46:55');
+INSERT INTO `tickets` (`id`, `asunto`, `descripcion`, `prioridad`, `estado`, `detalle_resolucion`, `solicitante_id`, `tecnico_id`, `fecha_creacion`, `fecha_mantenimiento`, `fecha_actualizacion`) VALUES
+(1, 'Error en Outlook', 'No puedo enviar correos desde esta mañana, arroja error de servidor.', 'Media', 'Nuevo', NULL, 3, NULL, '2026-04-09 10:38:58', NULL, '2026-04-09 10:38:58'),
+(3, 'inicio pc', 'No enciende', 'Media', 'Nuevo', NULL, 1, NULL, '2026-04-14 14:36:18', NULL, '2026-04-14 14:36:18'),
+(4, 'conexion a internet', 'Estoy teniendo incovenientes con la red ', 'Media', 'Nuevo', NULL, 1, NULL, '2026-04-14 14:38:56', NULL, '2026-04-14 14:38:56'),
+(5, 'falla impresion', 'mi impresora no conecta', 'Media', '', NULL, 1, 6, '2026-04-14 14:42:03', NULL, '2026-04-30 00:23:44'),
+(7, 'acceso a carpeta compartida', 'Intento ingresar a la carpeta de Finanzas y me pide una contraseña que no reconozco', 'Media', '', NULL, 1, 6, '2026-04-15 12:46:55', NULL, '2026-04-30 00:05:30');
 
 -- --------------------------------------------------------
 
@@ -141,10 +143,34 @@ CREATE TABLE `usuarios` (
 --
 
 INSERT INTO `usuarios` (`id`, `nombre_completo`, `usuario`, `email`, `password`, `rol`, `ultimo_login`, `creado_en`) VALUES
-(1, 'Administrador TI', 'admin', 'testadministrador@gmail.com', 'admin123', 'administrador', NULL, '2026-04-09 10:38:58'),
-(3, 'Operador de Turno', 'operativo02', 'testoperativo02@gmail.com', 'pass123', 'operativo', NULL, '2026-04-09 10:38:58'),
-(5, 'Operador de Turno', 'operativo01', 'testoperativo01@gmail.com', 'op123', 'operativo', NULL, '2026-04-21 14:03:03'),
-(6, 'Soporte Técnico', 'tecnico01', 'testtecnico@gmail.com', 'tec123', 'tecnico', NULL, '2026-04-21 14:03:03');
+(1, 'Tatiana Daian', 'admin', 'testadministrador@gmail.com', 'admin123', 'administrador', NULL, '2026-04-09 10:38:58'),
+(3, 'Franco Calizaya', 'operativo02', 'testoperativo02@gmail.com', 'pass123', 'operativo', NULL, '2026-04-09 10:38:58'),
+(5, 'Juan Abalos', 'operativo01', 'testoperativo01@gmail.com', 'op123', 'operativo', NULL, '2026-04-21 14:03:03'),
+(6, 'Samuel Toscano', 'tecnico01', 'testtecnico@gmail.com', 'tec123', 'tecnico', NULL, '2026-04-21 14:03:03'),
+(10, 'Carlos Mendez', 'admin02', 'admin02@neoadmin.com', 'admin456', 'administrador', NULL, '2026-04-30 00:29:35'),
+(11, 'Lucia Fernandez', 'admin03', 'admin03@neoadmin.com', 'admin789', 'administrador', NULL, '2026-04-30 00:29:35'),
+(12, 'Marcos Ruiz', 'tecnico02', 'mruiz@neoadmin.com', 'tec456', 'tecnico', NULL, '2026-04-30 00:29:35'),
+(13, 'Elena Gomez', 'tecnico03', 'egomez@neoadmin.com', 'tec789', 'tecnico', NULL, '2026-04-30 00:29:35'),
+(14, 'Roberto Diaz', 'tecnico04', 'rdiaz@neoadmin.com', 'tec101', 'tecnico', NULL, '2026-04-30 00:29:35'),
+(15, 'Julia Lopez', 'tecnico05', 'jlopez@neoadmin.com', 'tec202', 'tecnico', NULL, '2026-04-30 00:29:35'),
+(16, 'Pedro Sanchez', 'op03', 'op03@test.com', 'pass03', 'operativo', NULL, '2026-04-30 00:29:35'),
+(17, 'Maria Rodriguez', 'op04', 'op04@test.com', 'pass04', 'operativo', NULL, '2026-04-30 00:29:35'),
+(18, 'Jose Perez', 'op05', 'op05@test.com', 'pass05', 'operativo', NULL, '2026-04-30 00:29:35'),
+(19, 'Ana Martinez', 'op06', 'op06@test.com', 'pass06', 'operativo', NULL, '2026-04-30 00:29:35'),
+(20, 'Luis Garcia', 'op07', 'op07@test.com', 'pass07', 'operativo', NULL, '2026-04-30 00:29:35'),
+(21, 'Marta Lopez', 'op08', 'op08@test.com', 'pass08', 'operativo', NULL, '2026-04-30 00:29:35'),
+(22, 'Jorge Gonzalez', 'op09', 'op09@test.com', 'pass09', 'operativo', NULL, '2026-04-30 00:29:35'),
+(23, 'Sofia Hernandez', 'op10', 'op10@test.com', 'pass10', 'operativo', NULL, '2026-04-30 00:29:35'),
+(24, 'Diego Silva', 'op11', 'op11@test.com', 'pass11', 'operativo', NULL, '2026-04-30 00:29:35'),
+(25, 'Laura Castro', 'op12', 'op12@test.com', 'pass12', 'operativo', NULL, '2026-04-30 00:29:35'),
+(26, 'Andres Morales', 'op13', 'op13@test.com', 'pass13', 'operativo', NULL, '2026-04-30 00:29:35'),
+(27, 'Paula Ortiz', 'op14', 'op14@test.com', 'pass14', 'operativo', NULL, '2026-04-30 00:29:35'),
+(28, 'Martin Vega', 'op15', 'op15@test.com', 'pass15', 'operativo', NULL, '2026-04-30 00:29:35'),
+(29, 'Clara Rios', 'op16', 'op16@test.com', 'pass16', 'operativo', NULL, '2026-04-30 00:29:35'),
+(30, 'Raul Soto', 'op17', 'op17@test.com', 'pass17', 'operativo', NULL, '2026-04-30 00:29:35'),
+(31, 'Ines Luna', 'op18', 'op18@test.com', 'pass18', 'operativo', NULL, '2026-04-30 00:29:35'),
+(32, 'Hugo Flores', 'op19', 'op19@test.com', 'pass19', 'operativo', NULL, '2026-04-30 00:29:35'),
+(33, 'Victoria Paz', 'op20', 'op20@test.com', 'pass20', 'operativo', NULL, '2026-04-30 00:29:35');
 
 --
 -- Índices para tablas volcadas
@@ -206,7 +232,7 @@ ALTER TABLE `tickets`
 -- AUTO_INCREMENT de la tabla `usuarios`
 --
 ALTER TABLE `usuarios`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=34;
 
 --
 -- Restricciones para tablas volcadas
