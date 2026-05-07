@@ -2,8 +2,11 @@
 session_start();
 require_once 'db.php';
 
+// Establecer el encabezado para respuesta JSON
+header('Content-Type: application/json');
+
 // 1. Verificación de seguridad y permisos
-// Solo permite el acceso si el usuario está logueado y tiene rol de administrador o técnico
+// Solo permite el acceso si el usuario está logueado y es administrador o técnico
 if (!isset($_SESSION['usuario']) || !in_array($_SESSION['rol'], ['administrador', 'tecnico'])) {
     echo json_encode(['status' => 'error', 'message' => 'Acceso denegado: No autorizado']);
     exit();
@@ -20,7 +23,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
+    $stmt = null;
+
     switch ($accion) {
+        // --- ACCIÓN: GUARDAR CAMBIOS DESDE EL MODAL (ticket_detalle.php) ---
+        case 'editar_basico':
+            $asunto = $_POST['asunto'] ?? '';
+            $descripcion = $_POST['descripcion'] ?? '';
+            
+            if (empty($asunto) || empty($descripcion)) {
+                echo json_encode(['status' => 'error', 'message' => 'El título y la descripción son obligatorios']);
+                exit();
+            }
+
+            // Actualizamos la tabla usando 'asunto' como nombre de columna
+            $stmt = $conexion->prepare("UPDATE tickets SET asunto = ?, descripcion = ? WHERE id = ?");
+            $stmt->bind_param("ssi", $asunto, $descripcion, $id);
+            break;
+
         // ACCIÓN: ASIGNAR TÉCNICO
         case 'asignar':
             if (!isset($_POST['tecnico_id'])) {
@@ -35,17 +55,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // ACCIÓN: PROGRAMAR MANTENIMIENTO
         case 'mantenimiento':
-            $fecha = $_POST['fecha'];
-            $detalle = $_POST['detalle']; // Tareas a realizar descritas en el modal
-            // Se actualiza el estado, la fecha específica y se guardan las tareas en detalle_resolucion
+            $fecha = $_POST['fecha'] ?? '';
+            $detalle = $_POST['detalle'] ?? ''; 
             $stmt = $conexion->prepare("UPDATE tickets SET estado = 'Mantenimiento', fecha_mantenimiento = ?, detalle_resolucion = ? WHERE id = ?");
             $stmt->bind_param("ssi", $fecha, $detalle, $id);
             break;
 
         // ACCIÓN: RESOLVER O CERRAR TICKET
         case 'resolver':
-            $estado = $_POST['estado']; // 'Resuelto' o 'No Resuelto'
-            $detalle = $_POST['detalle']; // Explicación de la solución o motivo del cierre
+            $estado = $_POST['estado'] ?? ''; 
+            $detalle = $_POST['detalle'] ?? ''; 
             $stmt = $conexion->prepare("UPDATE tickets SET estado = ?, detalle_resolucion = ? WHERE id = ?");
             $stmt->bind_param("ssi", $estado, $detalle, $id);
             break;
@@ -56,14 +75,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // 3. Ejecución y respuesta al frontend
-    if ($stmt->execute()) {
-        // Envía respuesta exitosa para que el SweetAlert en tickets_lista.php se cierre y recargue
+    if ($stmt && $stmt->execute()) {
         echo json_encode(['status' => 'success']);
     } else {
-        echo json_encode(['status' => 'error', 'message' => 'Error en la base de datos: ' . $conexion->error]);
+        $errorMsg = $stmt ? $stmt->error : $conexion->error;
+        echo json_encode(['status' => 'error', 'message' => 'Error en la base de datos: ' . $errorMsg]);
     }
     
-    $stmt->close();
+    if ($stmt) $stmt->close();
+
 } else {
     echo json_encode(['status' => 'error', 'message' => 'Método de solicitud no permitido']);
 }

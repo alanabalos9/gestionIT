@@ -2,7 +2,7 @@
 session_start();
 require_once 'db.php';
 
-// Redirigir si no hay sesión iniciada[cite: 11]
+// Redirigir si no hay sesión iniciada
 if (!isset($_SESSION['usuario'])) {
     header("Location: index.php");
     exit();
@@ -12,7 +12,21 @@ $usuario_id = $_SESSION['usuario_id'];
 $rol = $_SESSION['rol'];
 $filtro_estado = $_GET['estado'] ?? '';
 
-// --- CONSULTA DE TICKETS ---
+// --- 1. LÓGICA DE CONTADORES SUPERIORES ---
+$query_stats = "SELECT 
+    COUNT(*) as total,
+    SUM(CASE WHEN estado = 'Abierto' THEN 1 ELSE 0 END) as abiertos,
+    SUM(CASE WHEN estado = 'En Proceso' THEN 1 ELSE 0 END) as proceso,
+    SUM(CASE WHEN estado = 'Mantenimiento' THEN 1 ELSE 0 END) as mantenimiento,
+    SUM(CASE WHEN estado = 'Resuelto' THEN 1 ELSE 0 END) as resueltos
+    FROM tickets";
+
+if ($rol != 'administrador' && $rol != 'tecnico') {
+    $query_stats .= " WHERE solicitante_id = $usuario_id";
+}
+$stats = $conexion->query($query_stats)->fetch_assoc();
+
+// --- 2. CONSULTA DE TICKETS SEGÚN ROL ---
 $sql = ($rol == 'administrador' || $rol == 'tecnico') 
     ? "SELECT t.id, t.asunto, t.descripcion, t.prioridad, t.estado, t.fecha_creacion, 
               t.fecha_mantenimiento, t.detalle_resolucion,
@@ -28,27 +42,15 @@ $sql = ($rol == 'administrador' || $rol == 'tecnico')
        WHERE t.solicitante_id = $usuario_id";
 
 if (!empty($filtro_estado)) {
-    $sql .= (strpos($sql, 'WHERE') !== false) ? " AND t.estado = ?" : " WHERE t.estado = ?";
+    $sql .= (strpos($sql, 'WHERE') !== false) ? " AND t.estado = '$filtro_estado'" : " WHERE t.estado = '$filtro_estado'";
 }
-
 $sql .= " ORDER BY t.fecha_creacion DESC";
-$stmt = $conexion->prepare($sql);
+$res = $conexion->query($sql);
 
-if (!empty($filtro_estado)) {
-    $stmt->bind_param("s", $filtro_estado);
-}
-
-$stmt->execute();
-$resultado = $stmt->get_result();
-
-// --- LISTA DE TÉCNICOS ---
+// Obtener técnicos para el modal de asignación
+$tecnicos_res = $conexion->query("SELECT id, nombre_completo FROM usuarios WHERE rol = 'tecnico'");
 $tecnicos = [];
-if ($rol == 'administrador' || $rol == 'tecnico') {
-    $res_tec = $conexion->query("SELECT id, nombre_completo FROM usuarios WHERE rol IN ('administrador', 'tecnico')");
-    while($t = $res_tec->fetch_assoc()) { 
-        $tecnicos[] = $t; 
-    }
-}
+while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
 ?>
 
 <!DOCTYPE html>
@@ -56,239 +58,265 @@ if ($rol == 'administrador' || $rol == 'tecnico') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NeoAdmin | Mesa de Ayuda</title>
-    
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+    <title>Mesa de Ayuda - NeoAdmin</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-dark: #0f172a;
-            --card-dark: #1e293b;
+            --bg-dark: #0b0f1a;
+            --card-bg: #161c2d;
             --accent: #38bdf8;
-            --accent-soft: rgba(56, 189, 248, 0.1);
-            --glass-border: rgba(255, 255, 255, 0.08);
-            --text-main: #f1f5f9;
+            --accent-soft: rgba(56, 189, 248, 0.15);
+            --text-gray: #94a3b8;
+            --logout-red: #f87171;
+            --logout-soft: rgba(248, 113, 113, 0.1);
         }
 
-        body {
-            background-color: var(--bg-dark);
-            font-family: 'Inter', sans-serif;
-            color: var(--text-main);
-            min-height: 100vh;
-            background-image: 
-                linear-gradient(rgba(56, 189, 248, 0.02) 1px, transparent 1px), 
-                linear-gradient(90deg, rgba(56, 189, 248, 0.02) 1px, transparent 1px);
-            background-size: 50px 50px;
+        body { 
+            background-color: var(--bg-dark); 
+            color: #f8fafc; 
+            font-family: 'Inter', sans-serif; 
         }
 
+        /* --- NUEVA NAVBAR ESTILO NEO --- */
         .neo-navbar {
-            background: rgba(30, 41, 59, 0.8);
+            background: rgba(22, 28, 45, 0.8);
             backdrop-filter: blur(10px);
-            border-bottom: 1px solid var(--glass-border);
-            padding: 12px 30px;
+            padding: 0.75rem 2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            margin-bottom: 2rem;
         }
+
+        .logo-img { height: 35px; width: auto; }
 
         .nav-link-neo {
-            color: white; text-decoration: none; font-weight: 600;
-            display: flex; align-items: center; gap: 8px;
-            transition: 0.3s; padding: 8px 15px; border-radius: 10px; font-size: 0.95rem;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-gray);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
         }
-        .nav-link-neo:hover { background: var(--accent-soft); color: var(--accent); }
 
-        .main-content { padding: 40px; }
+        .nav-link-neo:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.05);
+        }
 
-        .ticket-card {
-            background: var(--card-dark);
-            border: 1px solid var(--glass-border);
-            border-radius: 20px;
-            padding: 25px;
-            transition: 0.3s;
+        .nav-link-neo i { font-size: 1.1rem; }
+
+        .logout-btn {
+            color: var(--logout-red);
+            border: 1px solid var(--logout-soft);
+        }
+
+        .logout-btn:hover {
+            background: var(--logout-soft);
+            color: var(--logout-red);
+        }
+
+        /* --- CONTADORES --- */
+        .card-stat { 
+            background: var(--card-bg); 
+            border-radius: 15px; 
+            border: 1px solid rgba(255,255,255,0.05); 
+            padding: 15px; 
+            text-align: center; 
+        }
+        .card-stat h6 { font-family: 'Orbitron'; font-weight: bold; margin-bottom: 5px; font-size: 1.2rem; }
+        .card-stat small { color: #64748b; font-weight: bold; letter-spacing: 1px; font-size: 0.7rem; }
+
+        /* --- CARDS DE TICKETS --- */
+        .card-ticket { 
+            background: var(--card-bg); 
+            border-radius: 20px; 
+            border: 1px solid rgba(255,255,255,0.05); 
+            padding: 1.5rem;
             height: 100%;
+            transition: all 0.3s ease;
         }
-        .ticket-card:hover { border-color: var(--accent); transform: translateY(-5px); }
-
-        .priority-badge { font-size: 0.7rem; font-weight: 800; padding: 4px 10px; border-radius: 6px; text-transform: uppercase; }
-        .prio-alta { background: rgba(248, 113, 113, 0.1); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.2); }
-        .prio-media { background: rgba(251, 191, 36, 0.1); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.2); }
-        .prio-baja { background: rgba(163, 230, 53, 0.1); color: #a3e635; border: 1px solid rgba(163, 230, 53, 0.2); }
-
-        .timer-display {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.8rem;
-            color: var(--accent);
-            background: rgba(15, 23, 42, 0.5);
-            padding: 5px 12px;
-            border-radius: 20px;
-            border: 1px solid var(--accent-soft);
-        }
-
-        .action-grid {
+        .card-ticket:hover { border-color: var(--accent); transform: translateY(-5px); }
+        
+        .badge-prioridad { background: rgba(255,193,7,0.1); color: #ffc107; font-size: 0.7rem; border-radius: 8px; font-weight: bold; }
+        .badge-expirado { background: rgba(239,68,68,0.1); color: #ef4444; font-size: 0.7rem; border-radius: 8px; font-weight: bold; }
+        
+        /* --- BOTONES DE ACCIÓN GRID --- */
+        .btn-action-group {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 8px;
             margin-top: 15px;
         }
 
-        .btn-neo-action {
-            background: rgba(15, 23, 42, 0.4);
-            border: 1px solid var(--glass-border);
-            color: var(--text-main);
+        .btn-action-card {
+            background: #0f172a;
+            border: 1px solid rgba(255,255,255,0.05);
+            color: white;
             padding: 10px 5px;
             border-radius: 12px;
-            font-size: 0.65rem;
-            font-weight: 700;
-            display: flex; flex-direction: column; align-items: center; gap: 5px;
-            transition: 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
         }
-        .btn-neo-action i { font-size: 1.2rem; }
-        .btn-neo-action:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+
+        .btn-action-card:hover {
+            background: var(--accent-soft);
+            border-color: var(--accent);
+        }
+
+        .btn-action-card i { font-size: 1.2rem; margin-bottom: 4px; }
+        .btn-action-card span { 
+            font-size: 9px; 
+            text-transform: uppercase; 
+            color: var(--text-gray); 
+            font-weight: 700;
+        }
+        .btn-action-card:hover span { color: #fff; }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-thumb { background: var(--card-bg); border-radius: 10px; }
     </style>
 </head>
 <body>
 
     <nav class="neo-navbar d-flex justify-content-between align-items-center sticky-top">
         <div class="d-flex align-items-center gap-3">
-            <span style="font-family: 'Orbitron'; font-size: 1.2rem; color: var(--accent);">NEO ADMIN</span>
+            <img src="img/logo_neoadmin.png" alt="Logo" class="logo-img">
+            <span style="font-family: 'Orbitron'; font-size: 1.1rem; letter-spacing: 1px; color: var(--accent); font-weight: bold;">NEO ADMIN</span>
         </div>
+
         <div class="d-flex align-items-center gap-2">
-            <a href="dashboard.php" class="nav-link-neo"><i class="bi bi-house-door-fill"></i> Inicio</a>
-            <a href="tickets_lista.php" class="nav-link-neo" style="background: var(--accent-soft); color: var(--accent);"><i class="bi bi-headset"></i> Mesa de Ayuda</a>
-            <a href="logout.php" class="nav-link-neo text-danger"><i class="bi bi-box-arrow-right"></i> Salir</a>
+            <a href="dashboard.php" class="nav-link-neo">
+                <i class="bi bi-house-door"></i> Inicio
+            </a>
+            <a href="tickets_lista.php" class="nav-link-neo" style="background: var(--accent-soft); color: var(--accent);">
+                <i class="bi bi-headset"></i> Mesa de Ayuda
+            </a>
+            <div class="vr mx-2 opacity-25" style="height: 20px; align-self: center; background-color: white;"></div>
+            <a href="logout.php" class="nav-link-neo logout-btn">
+                <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
+            </a>
         </div>
     </nav>
 
-    <main class="main-content container-fluid">
-        <div class="d-flex justify-content-between align-items-center mb-5">
+    <div class="container pb-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <h1 class="fw-bold mb-1" style="font-family: 'Orbitron'; letter-spacing: 1px;">MESA DE AYUDA</h1>
-                <p class="text-secondary mb-0">Gestión de incidentes técnicos.</p>
+                <h2 style="font-family: 'Orbitron'; font-weight: bold; margin: 0; letter-spacing: 1px;">TICKETS</h2>
+                <p class="text-secondary small">Panel de control y seguimiento técnico.</p>
             </div>
-            <a href="tickets_crear.php" class="btn btn-info fw-bold px-4 py-2" style="border-radius: 12px;">
-                <i class="bi bi-plus-lg me-2"></i>NUEVO TICKET
+            <a href="nuevo_ticket.php" class="btn btn-info fw-bold px-4 py-2" style="border-radius: 12px; background: var(--accent); color:#000; border:none;">
+                <i class="bi bi-plus-lg me-1"></i> NUEVO TICKET
             </a>
         </div>
 
+        <div class="row g-3 mb-5">
+            <div class="col-md"><div class="card-stat"><h6><?php echo $stats['total']; ?></h6><small>TOTAL</small></div></div>
+            <div class="col-md"><div class="card-stat"><h6 class="text-warning"><?php echo $stats['abiertos']; ?></h6><small>ABIERTOS</small></div></div>
+            <div class="col-md"><div class="card-stat"><h6 class="text-info"><?php echo $stats['proceso']; ?></h6><small>PROCESO</small></div></div>
+            <div class="col-md"><div class="card-stat"><h6 class="text-primary"><?php echo $stats['mantenimiento']; ?></h6><small>MANTE.</small></div></div>
+            <div class="col-md"><div class="card-stat"><h6 class="text-success"><?php echo $stats['resueltos']; ?></h6><small>RESUELTOS</small></div></div>
+        </div>
+
         <div class="row g-4">
-            <?php while($row = $resultado->fetch_assoc()): 
-                $prio_class = 'prio-baja';
-                if(strtolower($row['prioridad']) == 'alta') $prio_class = 'prio-alta';
-                if(strtolower($row['prioridad']) == 'media') $prio_class = 'prio-media';
-                $fecha_limite = date('Y-m-d H:i:s', strtotime($row['fecha_creacion'] . ' + 24 hours'));
-            ?>
-            <div class="col-md-6 col-lg-4">
-                <div class="ticket-card">
-                    <div class="d-flex justify-content-between align-items-start mb-3">
-                        <span class="priority-badge <?php echo $prio_class; ?>">
-                            <?php echo $row['prioridad']; ?>
-                        </span>
-                        <div class="timer-display" data-deadline="<?php echo $fecha_limite; ?>" data-estado="<?php echo $row['estado']; ?>">
-                            00:00:00
-                        </div>
+            <?php while($row = $res->fetch_assoc()): ?>
+            <div class="col-md-4">
+                <div class="card-ticket">
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="badge badge-prioridad text-uppercase px-2 py-1"><?php echo $row['prioridad']; ?></span>
+                        <span class="badge badge-expirado text-uppercase px-2 py-1">EXPIRADO</span>
+                    </div>
+                    
+                    <h5 class="fw-bold text-white mb-2"><?php echo htmlspecialchars($row['asunto']); ?></h5>
+                    <p class="text-secondary small mb-1">Estado: <span class="text-info fw-bold"><?php echo $row['estado']; ?></span></p>
+                    <p class="text-secondary small mb-3">Técnico: <span class="text-white"><?php echo $row['tecnico_nombre'] ?? 'Pendiente'; ?></span></p>
+                    
+                    <hr class="border-secondary opacity-25">
+                    
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small text-secondary"><i class="bi bi-person me-1"></i><?php echo htmlspecialchars($row['solicitante_nombre']); ?></span>
+                        <a href="javascript:void(0)" onclick="verDetalle(<?php echo $row['id']; ?>)" class="text-info small text-decoration-none fw-bold">Detalles <i class="bi bi-chevron-right"></i></a>
                     </div>
 
-                    <h5 class="fw-bold mb-2 text-white"><?php echo htmlspecialchars($row['asunto']); ?></h5>
-                    <p class="text-secondary small mb-1">Estado: <span class="badge bg-secondary"><?php echo $row['estado']; ?></span></p>
-                    <p class="text-secondary small mb-1">Técnico: <span class="text-info"><?php echo $row['tecnico_nombre'] ?? 'Sin asignar'; ?></span></p>
-
-                    <div class="pt-3 border-top border-white border-opacity-10 mt-3">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <span class="small text-secondary"><i class="bi bi-person-circle me-1"></i> <?php echo $row['solicitante_nombre']; ?></span>
-                            <a href="ticket_detalle.php?id=<?php echo $row['id']; ?>" class="text-white-50 small text-decoration-none">Detalles <i class="bi bi-chevron-right"></i></a>
+                    <?php if ($rol == 'administrador' || $rol == 'tecnico'): ?>
+                    <div class="btn-action-group">
+                        <div onclick="asignarTicket(<?php echo $row['id']; ?>)" class="btn-action-card">
+                            <i class="bi bi-person-plus text-info"></i>
+                            <span>Asignar</span>
                         </div>
-
-                        <?php if ($rol == 'administrador' || $rol == 'tecnico'): ?>
-                        <div class="action-grid">
-                            <button onclick="asignarTecnico(<?php echo $row['id']; ?>)" class="btn-neo-action">
-                                <i class="bi bi-person-plus-fill"></i> Asignar
-                            </button>
-                            <button onclick="resolverTicket(<?php echo $row['id']; ?>)" class="btn-neo-action">
-                                <i class="bi bi-check-circle-fill"></i> Resolver
-                            </button>
-                            <button onclick="mantenimientoTicket(<?php echo $row['id']; ?>)" class="btn-neo-action">
-                                <i class="bi bi-tools"></i> Mante.
-                            </button>
+                        <div onclick="resolverTicket(<?php echo $row['id']; ?>)" class="btn-action-card">
+                            <i class="bi bi-check2-circle text-success"></i>
+                            <span>Resolver</span>
                         </div>
-                        <?php endif; ?>
+                        <div onclick="mantenimientoTicket(<?php echo $row['id']; ?>)" class="btn-action-card">
+                            <i class="bi bi-tools text-warning"></i>
+                            <span>Mante.</span>
+                        </div>
                     </div>
+                    <?php endif; ?>
                 </div>
             </div>
             <?php endwhile; ?>
         </div>
-    </main>
+    </div>
+
+    <div class="modal fade" id="modalDetalle" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="background: var(--card-bg); border-radius: 20px;">
+                <div id="modalContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
-        // --- TEMPORIZADORES[cite: 11] ---
-        function startTimers() {
-            const timers = document.querySelectorAll('.timer-display');
-            setInterval(() => {
-                const now = new Date().getTime();
-                timers.forEach(timer => {
-                    const estado = timer.dataset.estado;
-                    if(estado === 'Resuelto' || estado === 'No Resuelto') {
-                        timer.innerHTML = `<i class="bi bi-check-all"></i> CERRADO`;
-                        timer.style.color = "#a3e635";
-                        return;
-                    }
-                    const deadline = new Date(timer.dataset.deadline).getTime();
-                    const distance = deadline - now;
-                    if (distance < 0) {
-                        timer.innerHTML = "EXPIRADO";
-                        timer.style.color = "#f87171";
-                    } else {
-                        const h = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                        const m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-                        const s = Math.floor((distance % (1000 * 60)) / 1000);
-                        timer.innerHTML = `<i class="bi bi-clock-history"></i> ${h}h ${m}m ${s}s`;
-                    }
-                });
-            }, 1000);
-        }
-        startTimers();
+        let miModal;
 
-        // --- ACCIÓN: ASIGNAR TÉCNICO (ESTILO MEJORADO)[cite: 11] ---
-        async function asignarTecnico(id) {
+        function verDetalle(id) {
+            $('#modalContent').load('ticket_detalle.php?id=' + id, function() {
+                miModal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+                miModal.show();
+            });
+        }
+
+        async function asignarTicket(id) {
             const { value: tecnicoId } = await Swal.fire({
                 title: 'ASIGNAR TÉCNICO',
-                background: '#1e293b',
-                color: '#f1f5f9',
-                html: `
-                    <div class="p-2">
-                        <select id="sw-tecnico-select" class="form-select shadow-none" 
-                                style="background-color: #0f172a; color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">
-                            <option value="" disabled selected>Seleccione un técnico...</option>
-                            <?php foreach($tecnicos as $t): ?>
-                                <option value="<?php echo $t['id']; ?>" style="background-color: #1e293b; color: #fff;">
-                                    <?php echo addslashes($t['nombre_completo']); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                `,
+                input: 'select',
+                inputOptions: {
+                    <?php foreach($tecnicos as $t): ?>
+                    '<?php echo $t['id']; ?>': '<?php echo addslashes($t['nombre_completo']); ?>',
+                    <?php endforeach; ?>
+                },
+                inputPlaceholder: 'Seleccione profesional',
+                background: '#161c2d', color: '#fff',
                 showCancelButton: true,
-                confirmButtonColor: '#38bdf8',
-                confirmButtonText: 'Confirmar',
-                preConfirm: () => {
-                    const val = document.getElementById('sw-tecnico-select').value;
-                    if (!val) Swal.showValidationMessage('Seleccione un técnico');
-                    return val;
-                }
+                confirmButtonColor: '#38bdf8'
             });
             if (tecnicoId) enviarAccion({ id, tecnico_id: tecnicoId, accion: 'asignar' });
         }
 
         async function resolverTicket(id) {
             const { value: formValues } = await Swal.fire({
-                title: 'RESOLUCIÓN',
-                background: '#1e293b', color: '#fff',
+                title: 'RESOLVER TICKET',
+                background: '#161c2d', color: '#fff',
                 html: `
-                    <select id="sw-estado" class="swal2-input m-0 mb-3 w-100" style="background: #0f172a; color: white;">
+                    <select id="sw-estado" class="swal2-select m-0 mb-3 w-100" style="background: #0b0f1a; color: white;">
                         <option value="Resuelto">Resuelto</option>
                         <option value="No Resuelto">No Resuelto</option>
                     </select>
-                    <textarea id="sw-detalle" class="swal2-textarea m-0 w-100" style="background: #0f172a; color: white;" placeholder="Detalles..."></textarea>
+                    <textarea id="sw-detalle" class="swal2-textarea m-0 w-100" style="background: #0b0f1a; color: white;" placeholder="Solución..."></textarea>
                 `,
                 preConfirm: () => ({
                     estado: document.getElementById('sw-estado').value,
@@ -300,16 +328,15 @@ if ($rol == 'administrador' || $rol == 'tecnico') {
 
         async function mantenimientoTicket(id) {
             const { value: formValues } = await Swal.fire({
-                title: 'MANTENIMIENTO',
-                background: '#1e293b', color: '#fff',
+                title: 'PROGRAMAR MANTENIMIENTO',
+                background: '#161c2d', color: '#fff',
                 html: `
-                    <input type="date" id="sw-fecha" class="swal2-input m-0 mb-3 w-100" value="<?php echo date('Y-m-d'); ?>" style="background: #0f172a; color: white;">
-                    <textarea id="sw-detalle-mante" class="swal2-textarea m-0 w-100" style="background: #0f172a; color: white;" placeholder="Tareas..."></textarea>
+                    <input type="date" id="sw-fecha" class="swal2-input m-0 mb-3 w-100" value="<?php echo date('Y-m-d'); ?>" style="background: #0b0f1a; color: white;">
+                    <textarea id="sw-detalle-mante" class="swal2-textarea m-0 w-100" style="background: #0b0f1a; color: white;" placeholder="Tareas..."></textarea>
                 `,
                 preConfirm: () => ({
                     fecha: document.getElementById('sw-fecha').value,
-                    detalle: document.getElementById('sw-detalle-mante').value,
-                    estado: 'Mantenimiento'
+                    detalle: document.getElementById('sw-detalle-mante').value
                 })
             });
             if (formValues) enviarAccion({ ...formValues, id, accion: 'mantenimiento' });
@@ -318,11 +345,12 @@ if ($rol == 'administrador' || $rol == 'tecnico') {
         function enviarAccion(datos) {
             const formData = new FormData();
             for (let key in datos) { formData.append(key, datos[key]); }
+            
             fetch('tickets_procesar.php', { method: 'POST', body: formData })
             .then(res => res.json())
             .then(data => {
                 if(data.status === 'success') location.reload();
-                else Swal.fire({ icon: 'error', title: 'Error', text: data.message, background: '#1e293b', color: '#fff' });
+                else Swal.fire({ icon: 'error', title: 'Error', text: data.message, background: '#161c2d', color: '#fff' });
             });
         }
     </script>
