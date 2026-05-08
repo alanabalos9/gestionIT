@@ -75,7 +75,7 @@ $asunto = "🔐 Recuperacion de Acceso - NEO ADMIN";
 $cuerpo = "<div style='font-family: sans-serif; padding: 20px; background: #0f172a; color: white; border-radius: 15px;'>
             <h2 style='color: #38bdf8;'>NEO ADMIN</h2>
             <p>Se ha solicitado un enlace de recuperación para esta cuenta.</p>
-            <a href='http://localhost/gestionIT/gestionIT/gestionIT/restablecer.php?user=$email_rec' style='display: inline-block; padding: 10px 20px; background: #38bdf8; color: #0f172a; text-decoration: none; border-radius: 5px; font-weight: bold;'>RESTABLECER CLAVE</a>
+            <a href='http://localhost/gestionIT/restablecer.php?user=$email_rec' style='display: inline-block; padding: 10px 20px; background: #38bdf8; color: #0f172a; text-decoration: none; border-radius: 5px; font-weight: bold;'>RESTABLECER CLAVE</a>
            </div>";
 
     if (enviarCorreo($email_rec, $asunto, $cuerpo)) {

@@ -96,7 +96,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_crear_ticket'])) {
             background-size: 50px 50px;
         }
 
-        /* Navbar Superior */
         .neo-navbar {
             background: rgba(30, 41, 59, 0.8);
             backdrop-filter: blur(10px);
@@ -111,7 +110,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_crear_ticket'])) {
         }
         .nav-link-neo:hover { background: var(--accent-soft); color: var(--accent); }
 
-        /* Contenedor del Formulario */
         .form-container {
             max-width: 700px; margin: 50px auto;
             background: var(--card-dark);
@@ -123,15 +121,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_crear_ticket'])) {
 
         @keyframes fadeInPage { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
+        /* CORRECCIÓN DE VISIBILIDAD: Forzado de color de texto y fondo */
         .form-control-neo {
-            background: rgba(15, 23, 42, 0.5);
-            border: 1px solid var(--glass-border);
-            color: white !important;
-            border-radius: 12px; padding: 12px;
+            background: rgba(15, 23, 42, 0.8) !important;
+            border: 1px solid var(--glass-border) !important;
+            color: #ffffff !important; /* Texto siempre blanco */
+            border-radius: 12px; 
+            padding: 12px;
+        }
+
+        .form-control-neo::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* Estilo para el select (opciones visibles) */
+        .form-select.form-control-neo option {
+            background-color: #1e293b;
+            color: white;
         }
 
         .input-group-text-neo {
-            background: rgba(15, 23, 42, 0.8);
+            background: rgba(15, 23, 42, 0.9);
             border: 1px solid var(--glass-border);
             color: var(--accent);
             border-radius: 12px 0 0 12px;
@@ -144,7 +154,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_crear_ticket'])) {
         }
         .btn-submit:hover { background: #7dd3fc; transform: translateY(-2px); }
 
-        /* --- EFECTO RADAR DEL BOT (ICONO HEADSET) --- */
         .support-bot-trigger {
             position: fixed; bottom: 30px; right: 30px;
             width: 65px; height: 65px;
@@ -153,12 +162,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_crear_ticket'])) {
             display: flex; align-items: center; justify-content: center;
             cursor: pointer; z-index: 1000;
             color: var(--bg-dark); font-size: 1.8rem;
-            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7);
             animation: radar-pulse 2s infinite;
         }
-
-        .support-bot-trigger:hover { transform: scale(1.2); }
 
         @keyframes radar-pulse {
             0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7); }
@@ -206,7 +211,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_crear_ticket'])) {
                     <label class="form-label small fw-bold text-secondary">ASUNTO</label>
                     <div class="input-group">
                         <span class="input-group-text input-group-text-neo"><i class="bi bi-chat-left-dots"></i></span>
-                        <input type="text" name="asunto" class="form-control form-control-neo" placeholder="Breve descripción del problema" required>
+                        <input type="text" name="asunto" class="form-control form-control-neo" placeholder="Breve descripción del problema" required autocomplete="off">
                     </div>
                 </div>
 
@@ -267,17 +272,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_crear_ticket'])) {
             
             if (select.value === "Baja") {
                 icon.className = "bi bi-thermometer-low";
-                container.style.color = "#a3e635"; // Verde
+                container.style.color = "#a3e635"; 
             } else if (select.value === "Media") {
                 icon.className = "bi bi-thermometer-half";
-                container.style.color = "#fbbf24"; // Amarillo
+                container.style.color = "#fbbf24"; 
             } else {
                 icon.className = "bi bi-thermometer-high";
-                container.style.color = "#f87171"; // Rojo
+                container.style.color = "#f87171"; 
             }
         }
         
-        // Inicializar icono al cargar
         window.onload = updatePriorityIcon;
     </script>
 </body>
