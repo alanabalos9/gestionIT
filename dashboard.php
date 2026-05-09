@@ -289,7 +289,7 @@ $nombre = $_SESSION['nombre_completo'] ?? $_SESSION['usuario'];
             <i class="bi bi-x-lg" style="cursor:pointer" onclick="toggleBot()"></i>
         </div>
         <div class="p-4">
-            <p class="small mb-4">¿Dificultades en el dashboard? Notifique al administrador de guardia.</p>
+            <p class="small mb-4">¿En que podemos ayudarte? Notifique al administrador de guardia.</p>
             <form action="index.php" method="POST">
                 <input type="email" name="email_soporte" class="form-control form-control-sm mb-3" placeholder="Correo corporativo" required>
                 <button type="submit" name="btn_soporte_bot" class="btn btn-dark w-100 fw-bold">ENVIAR REPORTE</button>
