@@ -21,7 +21,7 @@ elseif ($rol !== 'administrador' && $rol !== 'tecnico') {
     exit();
 }
 
-// Consulta de Inventario con nombres de usuarios para la búsqueda y visualización
+// Consulta de Inventario con nombres de usuarios y categorías
 $query = "SELECT i.*, c.nombre AS categoria_nombre, u.nombre_completo AS nombre_usuario
           FROM inventario i 
           INNER JOIN categorias c ON i.tipo_id = c.id 
@@ -33,7 +33,7 @@ $resultado = $conexion->query($query);
 // Consulta para categorías (Filtro)
 $res_categorias = $conexion->query("SELECT * FROM categorias ORDER BY nombre ASC");
 
-// Consulta para lista de usuarios (Para el selector del Modal de edición)
+// Consulta para lista de usuarios (Modal)
 $res_usuarios_modal = $conexion->query("SELECT id, nombre_completo FROM usuarios ORDER BY nombre_completo ASC");
 $usuarios_opciones = "";
 while($u = $res_usuarios_modal->fetch_assoc()){
@@ -74,7 +74,6 @@ while($u = $res_usuarios_modal->fetch_assoc()){
             background-size: 50px 50px;
         }
 
-        /* Navbar restaurada con tu diseño original */
         .neo-navbar {
             background: rgba(30, 41, 59, 0.8);
             backdrop-filter: blur(10px);
@@ -134,41 +133,51 @@ while($u = $res_usuarios_modal->fetch_assoc()){
             height: 100%;
             transition: 0.4s;
             position: relative;
+            overflow: hidden; 
         }
 
         .asset-card:hover { transform: translateY(-5px); border-color: var(--accent); }
 
-        /* ID Limpio sin el círculo rojo */
         .id-badge {
             position: absolute;
-            top: 15px;
-            right: 20px;
+            top: 12px;
+            right: 15px;
             color: var(--accent);
-            font-size: 0.75rem;
+            font-size: 0.65rem;
             font-weight: 700;
             font-family: 'Orbitron';
-            opacity: 0.8;
+            opacity: 0.6;
+            z-index: 5;
         }
 
+        /* DISEÑO DE ESTADO MEJORADO */
+        .status-pill {
+            position: absolute;
+            top: 40px;
+            right: -2px;
+            font-size: 0.6rem; 
+            padding: 4px 12px;
+            border-radius: 4px 0 0 4px; 
+            font-weight: 800;
+            text-transform: uppercase;
+            box-shadow: -2px 2px 8px rgba(0,0,0,0.4);
+            z-index: 10;
+            letter-spacing: 0.5px;
+        }
+
+        .status-disponible { background: #10b981; color: #fff; border: 1px solid #059669; }
+        .status-asignado { background: #3b82f6; color: #fff; border: 1px solid #2563eb; }
+        .status-reparacion { background: #ef4444; color: #fff; border: 1px solid #dc2626; }
+
         .asset-icon-wrapper {
-            width: 50px; height: 50px;
+            width: 48px; height: 48px;
             background: var(--accent-soft);
             color: var(--accent);
             border-radius: 12px;
             display: flex; align-items: center; justify-content: center;
-            font-size: 22px;
+            font-size: 20px;
+            margin-bottom: 15px;
         }
-
-        /* Estilos de Estado para las cards */
-        .status-pill {
-            font-size: 0.65rem; padding: 4px 10px;
-            border-radius: 8px; font-weight: 800;
-            text-transform: uppercase;
-            display: inline-block;
-        }
-        .status-disponible { background: rgba(74, 222, 128, 0.1); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.3); }
-        .status-asignado { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.3); }
-        .status-reparacion { background: rgba(248, 113, 113, 0.1); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.3); }
 
         .info-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 0.85rem; }
         .info-row i { color: var(--accent); width: 16px; }
@@ -214,22 +223,28 @@ while($u = $res_usuarios_modal->fetch_assoc()){
 
         <div class="row g-4" id="inventoryGrid">
             <?php while($row = $resultado->fetch_assoc()): 
-                // Lógica de colores por estado
-                $st = mb_strtolower($row['estado'], 'UTF-8');
-                $st_class = "status-reparacion"; 
-                if ($st == 'disponible') $st_class = "status-disponible";
-                if ($st == 'asignado') $st_class = "status-asignado";
+                // NORMALIZACIÓN DE ESTADO PARA CSS
+                $estado_actual = $row['estado'] ?: 'Disponible';
+                $st_comp = mb_strtolower($estado_actual, 'UTF-8');
+                
+                $st_class = "status-disponible"; 
+                if ($st_comp === 'asignado') {
+                    $st_class = "status-asignado";
+                } elseif (strpos($st_comp, 'repara') !== false) {
+                    $st_class = "status-reparacion";
+                }
 
                 $search_data = strtolower($row['marca']." ".$row['modelo']." ".$row['codigo_patrimonial']." ".$row['sector']." ".$row['nombre_usuario']);
             ?>
             <div class="col-md-6 col-lg-4 asset-item" data-category="<?php echo $row['categoria_nombre']; ?>" data-search="<?php echo $search_data; ?>">
                 <div class="asset-card">
+                    <span class="status-pill <?php echo $st_class; ?>">
+                        <?php echo htmlspecialchars($estado_actual); ?>
+                    </span>
+                    
                     <span class="id-badge">ID #<?php echo $row['id']; ?></span>
 
-                    <div class="d-flex justify-content-between mb-3">
-                        <div class="asset-icon-wrapper"><i class="bi bi-pc-display"></i></div>
-                        <span class="status-pill <?php echo $st_class; ?>"><?php echo $row['estado']; ?></span>
-                    </div>
+                    <div class="asset-icon-wrapper"><i class="bi bi-pc-display"></i></div>
 
                     <h5 class="fw-bold mb-1"><?php echo $row['marca']." ".$row['modelo']; ?></h5>
                     <p class="small text-secondary mb-3">Patrimonio: <span class="text-white"><?php echo $row['codigo_patrimonial']; ?></span></p>
@@ -270,6 +285,8 @@ while($u = $res_usuarios_modal->fetch_assoc()){
                                 <option value="Sistemas">Sistemas</option>
                                 <option value="Operaciones">Operaciones</option>
                                 <option value="Recursos Humanos">Recursos Humanos</option>
+                                <option value="Infraestructura">Infraestructura</option>
+                                <option value="Contabilidad">Contabilidad</option>
                             </select>
                         </div>
                         <div class="mb-3">
@@ -318,19 +335,31 @@ while($u = $res_usuarios_modal->fetch_assoc()){
         document.getElementById('searchInput').addEventListener('input', filter);
         document.getElementById('categoryFilter').addEventListener('change', filter);
 
-        // Envío AJAX corregido para la actualización
+        // Envío AJAX reforzado
         document.getElementById('formUpdateInventario').onsubmit = function(e) {
             e.preventDefault();
             const formData = new FormData(this);
-            fetch('inventario_update_proceso.php', { method: 'POST', body: formData })
+
+            // Aseguramos que el estado se esté enviando
+            console.log("Enviando ID:", formData.get('id'), "Estado:", formData.get('estado'));
+
+            fetch('inventario_update_proceso.php', { 
+                method: 'POST', 
+                body: formData 
+            })
             .then(response => response.text())
-            .then(() => {
+            .then(data => {
+                console.log("Respuesta servidor:", data);
                 Swal.fire({
                     title: '¡Actualizado!',
                     text: 'Los cambios se guardaron correctamente.',
                     icon: 'success',
                     background: '#1e293b', color: '#fff', confirmButtonColor: '#38bdf8'
                 }).then(() => location.reload());
+            })
+            .catch(error => {
+                console.error("Error en la petición:", error);
+                Swal.fire('Error', 'No se pudo conectar con el servidor', 'error');
             });
         };
     </script>
