@@ -4,6 +4,7 @@ require_once 'db.php';
 
 /**
  * CONTROL DE ACCESO
+ * Verifica que el usuario esté logueado y tenga permisos suficientes.
  */
 if (!isset($_SESSION['rol'])) {
     header("Location: login.php");
@@ -150,7 +151,6 @@ while($u = $res_usuarios_modal->fetch_assoc()){
             z-index: 5;
         }
 
-        /* DISEÑO DE ESTADO MEJORADO */
         .status-pill {
             position: absolute;
             top: 40px;
@@ -165,6 +165,7 @@ while($u = $res_usuarios_modal->fetch_assoc()){
             letter-spacing: 0.5px;
         }
 
+        /* Colores dinámicos para los estados */
         .status-disponible { background: #10b981; color: #fff; border: 1px solid #059669; }
         .status-asignado { background: #3b82f6; color: #fff; border: 1px solid #2563eb; }
         .status-reparacion { background: #ef4444; color: #fff; border: 1px solid #dc2626; }
@@ -223,10 +224,10 @@ while($u = $res_usuarios_modal->fetch_assoc()){
 
         <div class="row g-4" id="inventoryGrid">
             <?php while($row = $resultado->fetch_assoc()): 
-                // NORMALIZACIÓN DE ESTADO PARA CSS
                 $estado_actual = $row['estado'] ?: 'Disponible';
                 $st_comp = mb_strtolower($estado_actual, 'UTF-8');
                 
+                // Lógica de clases CSS según el estado
                 $st_class = "status-disponible"; 
                 if ($st_comp === 'asignado') {
                     $st_class = "status-asignado";
@@ -315,15 +316,20 @@ while($u = $res_usuarios_modal->fetch_assoc()){
     <script>
         const modalEdit = new bootstrap.Modal(document.getElementById('modalEditar'));
 
+        /**
+         * Carga los datos del activo en el formulario del modal.
+         */
         function abrirModalEditar(data) {
             document.getElementById('edit_id').value = data.id;
             document.getElementById('edit_sector').value = data.sector || '';
             document.getElementById('edit_usuario').value = data.usuario_asignado_id || '';
-            document.getElementById('edit_estado').value = data.estado;
+            document.getElementById('edit_estado').value = data.estado || 'Disponible';
             modalEdit.show();
         }
 
-        // Búsqueda y filtrado
+        /**
+         * Lógica de búsqueda y filtrado por categoría.
+         */
         function filter() {
             const text = document.getElementById('searchInput').value.toLowerCase();
             const cat = document.getElementById('categoryFilter').value;
@@ -335,13 +341,12 @@ while($u = $res_usuarios_modal->fetch_assoc()){
         document.getElementById('searchInput').addEventListener('input', filter);
         document.getElementById('categoryFilter').addEventListener('change', filter);
 
-        // Envío AJAX reforzado
+        /**
+         * Envío de datos mediante AJAX y actualización visual.
+         */
         document.getElementById('formUpdateInventario').onsubmit = function(e) {
             e.preventDefault();
             const formData = new FormData(this);
-
-            // Aseguramos que el estado se esté enviando
-            console.log("Enviando ID:", formData.get('id'), "Estado:", formData.get('estado'));
 
             fetch('inventario_update_proceso.php', { 
                 method: 'POST', 
@@ -349,16 +354,24 @@ while($u = $res_usuarios_modal->fetch_assoc()){
             })
             .then(response => response.text())
             .then(data => {
-                console.log("Respuesta servidor:", data);
-                Swal.fire({
-                    title: '¡Actualizado!',
-                    text: 'Los cambios se guardaron correctamente.',
-                    icon: 'success',
-                    background: '#1e293b', color: '#fff', confirmButtonColor: '#38bdf8'
-                }).then(() => location.reload());
+                if(data.trim() === "success") {
+                    Swal.fire({
+                        title: '¡Actualizado!',
+                        text: 'Los cambios se han guardado correctamente.',
+                        icon: 'success',
+                        background: '#1e293b', 
+                        color: '#fff', 
+                        confirmButtonColor: '#38bdf8'
+                    }).then(() => {
+                        // RECARGA NECESARIA: Permite que PHP genere las nuevas clases CSS de estado.
+                        location.reload(); 
+                    });
+                } else {
+                    Swal.fire('Error', 'Servidor respondió: ' + data, 'error');
+                }
             })
             .catch(error => {
-                console.error("Error en la petición:", error);
+                console.error("Error:", error);
                 Swal.fire('Error', 'No se pudo conectar con el servidor', 'error');
             });
         };
