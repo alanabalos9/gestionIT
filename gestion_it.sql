@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 12-05-2026 a las 04:40:32
+-- Tiempo de generación: 14-05-2026 a las 02:58:01
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
 
@@ -60,7 +60,7 @@ CREATE TABLE `inventario` (
   `marca` varchar(50) DEFAULT NULL,
   `modelo` varchar(50) DEFAULT NULL,
   `serie` varchar(100) DEFAULT NULL,
-  `estado` enum('Administrador','Tecnico','Operativo') DEFAULT 'Operativo',
+  `estado` enum('Disponible','Asignado','Reparación') NOT NULL DEFAULT 'Disponible',
   `usuario_asignado_id` int(11) DEFAULT NULL,
   `sector` varchar(100) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -70,26 +70,26 @@ CREATE TABLE `inventario` (
 --
 
 INSERT INTO `inventario` (`id`, `codigo_patrimonial`, `tipo_id`, `marca`, `modelo`, `serie`, `estado`, `usuario_asignado_id`, `sector`) VALUES
-(61, 'NBK-2024-001', 1, 'Dell', 'Latitude 3420', NULL, '', 1, 'Administración'),
-(62, 'NBK-2024-002', 1, 'Lenovo', 'ThinkPad E14', NULL, '', 3, 'Sistemas'),
-(63, 'MON-24-015', 2, 'Samsung', 'Odyssey G3 24\"', NULL, '', 5, 'Ventas'),
-(64, 'MON-27-008', 2, 'LG', 'UltraGear 27\"', NULL, '', 6, 'Sistemas'),
-(65, 'SRV-DB-01', 3, 'HP', 'ProLiant DL380', NULL, '', 10, 'Data Center'),
-(66, 'PRN-OFF-03', 4, 'Brother', 'HL-L2350DW', NULL, '', 13, 'Recepción'),
-(67, 'NBK-2023-088', 1, 'Apple', 'MacBook Air M2', NULL, '', NULL, NULL),
-(68, 'PC-DESK-010', 5, 'Banghó', 'Cross B24', NULL, '', NULL, NULL),
-(69, 'MON-24-019', 2, 'Dell', 'P2422H', NULL, '', NULL, NULL),
-(70, 'PER-KYB-005', 6, 'Logitech', 'K120 USB', NULL, '', 14, 'Ventas'),
-(71, 'PER-MOU-012', 6, 'Genius', 'DX-110', NULL, '', 15, 'Ventas'),
-(72, 'SRV-WEB-02', 3, 'Dell', 'PowerEdge T150', NULL, '', NULL, NULL),
-(73, 'NBK-2024-005', 1, 'ASUS', 'Vivobook 15', NULL, '', NULL, NULL),
-(74, 'TAB-01-001', 7, 'Samsung', 'Galaxy Tab S9', NULL, '', NULL, NULL),
-(75, 'PRN-LOG-01', 4, 'Epson', 'EcoTank L3250', NULL, '', 12, 'Contabilidad'),
-(76, 'SWT-CORE-01', 8, 'Cisco', 'Catalyst 2960', NULL, '', 11, 'Infraestructura'),
-(77, 'WAP-PISO1-02', 8, 'Ubiquiti', 'UniFi AP AC Pro', NULL, '', NULL, NULL),
-(78, 'NBK-2024-010', 1, 'HP', 'ProBook 440 G9', NULL, '', NULL, NULL),
-(79, 'MON-19-002', 2, 'ViewSonic', 'VA1903H', NULL, '', 12, 'Administración'),
-(80, 'UPS-SVR-01', 9, 'APC', 'Smart-UPS 1500VA', NULL, '', NULL, '');
+(61, 'NBK-2024-001', 1, 'Dell', 'Latitude 3420', NULL, 'Disponible', 1, 'Administración'),
+(62, 'NBK-2024-002', 1, 'Lenovo', 'ThinkPad E14', NULL, 'Disponible', 3, 'Sistemas'),
+(63, 'MON-24-015', 2, 'Samsung', 'Odyssey G3 24\"', NULL, 'Disponible', 5, 'Ventas'),
+(64, 'MON-27-008', 2, 'LG', 'UltraGear 27\"', NULL, 'Disponible', 6, 'Sistemas'),
+(65, 'SRV-DB-01', 3, 'HP', 'ProLiant DL380', NULL, 'Disponible', 10, 'Data Center'),
+(66, 'PRN-OFF-03', 4, 'Brother', 'HL-L2350DW', NULL, 'Disponible', 13, 'Recepción'),
+(67, 'NBK-2023-088', 1, 'Apple', 'MacBook Air M2', NULL, 'Disponible', NULL, NULL),
+(68, 'PC-DESK-010', 5, 'Banghó', 'Cross B24', NULL, 'Disponible', NULL, NULL),
+(69, 'MON-24-019', 2, 'Dell', 'P2422H', NULL, 'Disponible', NULL, NULL),
+(70, 'PER-KYB-005', 6, 'Logitech', 'K120 USB', NULL, 'Disponible', 14, 'Ventas'),
+(71, 'PER-MOU-012', 6, 'Genius', 'DX-110', NULL, 'Disponible', 15, 'Ventas'),
+(72, 'SRV-WEB-02', 3, 'Dell', 'PowerEdge T150', NULL, 'Disponible', NULL, NULL),
+(73, 'NBK-2024-005', 1, 'ASUS', 'Vivobook 15', NULL, 'Disponible', NULL, NULL),
+(74, 'TAB-01-001', 7, 'Samsung', 'Galaxy Tab S9', NULL, 'Disponible', NULL, NULL),
+(75, 'PRN-LOG-01', 4, 'Epson', 'EcoTank L3250', NULL, 'Disponible', 12, 'Contabilidad'),
+(76, 'SWT-CORE-01', 8, 'Cisco', 'Catalyst 2960', NULL, 'Disponible', 11, 'Infraestructura'),
+(77, 'WAP-PISO1-02', 8, 'Ubiquiti', 'UniFi AP AC Pro', NULL, 'Disponible', NULL, NULL),
+(78, 'NBK-2024-010', 1, 'HP', 'ProBook 440 G9', NULL, 'Disponible', NULL, NULL),
+(79, 'MON-19-002', 2, 'ViewSonic', 'VA1903H', NULL, 'Disponible', 12, 'Administración'),
+(80, 'UPS-SVR-01', 9, 'APC', 'Smart-UPS 1500VA', NULL, 'Reparación', 6, 'Finanzas');
 
 -- --------------------------------------------------------
 
