@@ -48,24 +48,40 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_crear_ticket'])) {
     $origen = $_POST['origen'];
     $solicitante_id = $_SESSION['usuario_id'];
     
+    // Variables para el archivo
+    $contenido_archivo = null;
     $nombre_archivo = null;
+    $tipo_archivo = null;
 
+    // Verificar si se subió un archivo sin errores
     if (isset($_FILES['adjunto']) && $_FILES['adjunto']['error'] == 0) {
-        $directorio = "uploads/";
-        if (!is_dir($directorio)) { mkdir($directorio, 0777, true); }
-        $nombre_archivo = time() . "_" . basename($_FILES['adjunto']['name']);
-        move_uploaded_file($_FILES['adjunto']['tmp_name'], $directorio . $nombre_archivo);
+        $nombre_archivo = basename($_FILES['adjunto']['name']);
+        $tipo_archivo = $_FILES['adjunto']['type'];
+        $ruta_temporal = $_FILES['adjunto']['tmp_name'];
     }
 
-    $sql = "INSERT INTO tickets (asunto, descripcion, prioridad, tipo, origen, archivo_adjunto, solicitante_id, estado) VALUES (?, ?, ?, ?, ?, ?, ?, 'Abierto')";
+    // Consulta SQL adaptada para BLOB y los metadatos del archivo
+    $sql = "INSERT INTO tickets (asunto, descripcion, prioridad, tipo, origen, archivo_adjunto, archivo_nombre, archivo_tipo, solicitante_id, estado) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Abierto')";
+    
     $stmt = $conexion->prepare($sql);
-    $stmt->bind_param("ssssssi", $asunto, $descripcion, $prioridad, $tipo, $origen, $nombre_archivo, $solicitante_id);
+
+    // Nota: Para datos BLOB pasamos 'b' en el bind_param. 
+    // Usamos NULL temporalmente en el bind para luego inyectar los datos binarios con send_long_data.
+    $stmt->bind_param("sssssbssi", $asunto, $descripcion, $prioridad, $tipo, $origen, $contenido_archivo, $nombre_archivo, $tipo_archivo, $solicitante_id);
+
+    // Si hay un archivo cargado, se envía en bloques de datos (evita desbordamiento de memoria)
+    if ($nombre_archivo !== null) {
+        // El parámetro BLOB es el sexto (índice 5 empezando desde 0)
+        $stmt->send_long_data(5, file_get_contents($ruta_temporal));
+    }
 
     if ($stmt->execute()) {
         $msg = "Ticket #".$conexion->insert_id." generado con éxito.";
     } else {
-        $error = "Error al guardar en base de datos.";
+        $error = "Error al guardar en base de datos: " . $stmt->error;
     }
+    $stmt->close();
 }
 ?>
 
@@ -106,17 +122,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_crear_ticket'])) {
         .form-control-neo { background: rgba(15, 23, 42, 0.8) !important; border: 1px solid var(--glass-border) !important; color: #ffffff !important; border-radius: 12px; padding: 12px; }
         .form-control-neo:focus { box-shadow: 0 0 0 2px var(--accent-soft); border-color: var(--accent) !important; }
         
-        /* Colores dinámicos para el termómetro */
-        .termometro-baja { color: #10b981 !important; } /* Verde */
-        .termometro-media { color: #f59e0b !important; } /* Naranja */
-        .termometro-alta { color: #ef4444 !important; } /* Rojo */
+        .termometro-baja { color: #10b981 !important; } 
+        .termometro-media { color: #f59e0b !important; } 
+        .termometro-alta { color: #ef4444 !important; } 
 
         .input-group-text-neo { background: rgba(15, 23, 42, 0.9); border: 1px solid var(--glass-border); border-radius: 12px 0 0 12px; transition: 0.3s; }
         .btn-submit { background: var(--accent); color: var(--bg-dark); font-weight: 800; border-radius: 12px; padding: 14px; border: none; text-transform: uppercase; transition: 0.3s; }
         .btn-submit:hover { background: #7dd3fc; transform: translateY(-2px); }
         .btn-cancel { background: transparent; color: #94a3b8; border: 1px solid #475569; border-radius: 12px; font-weight: 600; transition: 0.3s; }
 
-        /* Estilos del ChatBot solicitado */
         .support-bot-trigger { position: fixed; bottom: 30px; right: 30px; width: 65px; height: 65px; background: var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 1000; color: var(--bg-dark); font-size: 1.8rem; animation: radar-pulse 2s infinite; }
         @keyframes radar-pulse { 0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7); } 70% { box-shadow: 0 0 0 20px rgba(56, 189, 248, 0); } 100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); } }
 
@@ -235,10 +249,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_crear_ticket'])) {
             const icon = document.querySelector('#termometro-icon i');
             const valor = select.value;
 
-            // Limpiar clases previas
             icon.classList.remove('termometro-baja', 'termometro-media', 'termometro-alta');
 
-            // Asignar nueva clase según valor
             if (valor === 'Baja') {
                 icon.classList.add('termometro-baja');
             } else if (valor === 'Media') {
@@ -248,8 +260,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_crear_ticket'])) {
             }
         }
 
-        // Ejecutar al cargar para establecer color inicial
         window.onload = actualizarColorPrioridad;
     </script>
 </body>
-</html> 
+</html>

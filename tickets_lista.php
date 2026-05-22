@@ -29,15 +29,15 @@ $stats = $stats_res->fetch_assoc();
 
 // --- 2. CONSULTA DE TICKETS ---
 $sql = ($rol == 'administrador' || $rol == 'tecnico') 
-    ? "SELECT t.id, t.asunto, t.descripcion, t.prioridad, t.estado, t.fecha_creacion, t.fecha_limite,
-              t.fecha_mantenimiento, t.detalle_resolucion,
+    ? "SELECT t.id, t.asunto, t.descripcion, t.prioridad, t.estado, t.tipo, t.fecha_creacion, t.fecha_limite,
+              t.fecha_mantenimiento, t.detalle_resolucion, t.archivo_adjunto,
               u_sol.nombre_completo AS solicitante_nombre, u_tec.nombre_completo AS tecnico_nombre,
               t.tecnico_id
        FROM tickets t
        JOIN usuarios u_sol ON t.solicitante_id = u_sol.id
        LEFT JOIN usuarios u_tec ON t.tecnico_id = u_tec.id" 
-    : "SELECT t.id, t.asunto, t.descripcion, t.prioridad, t.estado, t.fecha_creacion, t.fecha_limite,
-              t.fecha_mantenimiento, t.detalle_resolucion,
+    : "SELECT t.id, t.asunto, t.descripcion, t.prioridad, t.estado, t.tipo, t.fecha_creacion, t.fecha_limite,
+              t.fecha_mantenimiento, t.detalle_resolucion, t.archivo_adjunto,
               u_sol.nombre_completo AS solicitante_nombre 
        FROM tickets t
        JOIN usuarios u_sol ON t.solicitante_id = u_sol.id
@@ -69,6 +69,7 @@ while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
             --card-bg: #161c2d;
             --accent: #38bdf8;
             --accent-soft: rgba(56, 189, 248, 0.15);
+            --glass-border: rgba(255, 255, 255, 0.08);
             --text-gray: #94a3b8;
             --warning-alert: #fbbf24;
             --danger-alert: #ef4444;
@@ -79,16 +80,21 @@ while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
         .logo-img { height: 35px; }
         .nav-link-neo { text-decoration: none; padding: 8px 16px; border-radius: 10px; font-size: 0.9rem; color: var(--text-gray); display: flex; align-items: center; gap: 8px; transition: 0.2s; }
         .nav-link-neo:hover { color: #fff; background: rgba(255, 255, 255, 0.05); }
-        .card-stat { background: var(--card-bg); border-radius: 15px; border: 1px solid rgba(255,255,255,0.05); padding: 15px; text-align: center; }
+        
+        .card-stat { background: var(--card-bg); border-radius: 15px; border: 1px solid rgba(255,255,255,0.05); padding: 15px; text-align: center; text-decoration: none; display: block; transition: 0.2s; }
+        .card-stat:hover { border-color: var(--accent); transform: translateY(-2px); }
         .card-stat h6 { font-family: 'Orbitron'; font-weight: bold; font-size: 1.2rem; margin: 0; }
         .card-stat small { color: #64748b; font-size: 0.7rem; font-weight: 700; letter-spacing: 1px; }
+        
         .card-ticket { background: var(--card-bg); border-radius: 20px; border: 1px solid rgba(255,255,255,0.05); padding: 1.5rem; height: 100%; transition: all 0.3s ease; position: relative; border-left: 5px solid transparent; }
         .card-normal { border-left-color: var(--accent); }
         .card-warning { border-left-color: var(--warning-alert); background: rgba(251, 191, 36, 0.03); }
         .card-expired { border-left-color: var(--danger-alert); background: rgba(239, 68, 68, 0.05); animation: pulse-red 2s infinite; }
         .card-mantenimiento { border-left-color: var(--mante-color); background: rgba(139, 92, 246, 0.05); }
         
-        /* CORRECCIÓN DE VISIBILIDAD EN SELECTS DE MODALES */
+        .form-control-neo { background: rgba(15, 23, 42, 0.8) !important; border: 1px solid var(--glass-border) !important; color: #ffffff !important; border-radius: 12px; padding: 12px; }
+        .form-control-neo:focus { box-shadow: 0 0 0 2px var(--accent-soft); border-color: var(--accent) !important; }
+
         .swal2-select {
             background-color: #0f172a !important;
             color: white !important;
@@ -133,14 +139,21 @@ while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
         </div>
 
         <div class="row g-3 mb-5">
-            <div class="col-md"><div class="card-stat"><h6><?php echo $stats['total']; ?></h6><small>TOTAL</small></div></div>
-            <div class="col-md"><div class="card-stat"><h6 class="text-warning"><?php echo $stats['abiertos']; ?></h6><small>ABIERTOS</small></div></div>
-            <div class="col-md"><div class="card-stat"><h6 class="text-info"><?php echo $stats['proceso']; ?></h6><small>PROCESO</small></div></div>
-            <div class="col-md"><div class="card-stat"><h6 style="color: var(--mante-color);"><?php echo $stats['mantenimiento']; ?></h6><small>MANTE.</small></div></div>
-            <div class="col-md"><div class="card-stat"><h6 class="text-success"><?php echo $stats['resueltos']; ?></h6><small>RESUELTOS</small></div></div>
+            <div class="col-md"><a href="tickets_lista.php" class="card-stat"><h6><?php echo $stats['total']; ?></h6><small>TOTAL</small></a></div>
+            <div class="col-md"><a href="tickets_lista.php?estado=Abierto" class="card-stat"><h6 class="text-warning"><?php echo $stats['abiertos']; ?></h6><small>ABIERTOS</small></a></div>
+            <div class="col-md"><a href="tickets_lista.php?estado=En Proceso" class="card-stat"><h6 class="text-info"><?php echo $stats['proceso']; ?></h6><small>PROCESO</small></a></div>
+            <div class="col-md"><a href="tickets_lista.php?estado=Mantenimiento" class="card-stat"><h6 style="color: var(--mante-color);"><?php echo $stats['mantenimiento']; ?></h6><small>MANTE.</small></a></div>
+            <div class="col-md"><a href="tickets_lista.php?estado=Resuelto" class="card-stat"><h6 class="text-success"><?php echo $stats['resueltos']; ?></h6><small>RESUELTOS</small></a></div>
         </div>
 
         <div class="row g-4">
+            <?php if ($res->num_rows === 0): ?>
+                <div class="col-12 text-center py-5">
+                    <i class="bi bi-folder-x text-secondary" style="font-size: 3rem;"></i>
+                    <p class="text-secondary mt-2">No se encontraron registros de tickets para este criterio.</p>
+                </div>
+            <?php endif; ?>
+
             <?php while($row = $res->fetch_assoc()): 
                 $isMantenimiento = ($row['estado'] === 'Mantenimiento');
                 $displayTitle = $isMantenimiento ? ($row['detalle_resolucion'] ?: 'Mantenimiento Programado') : $row['asunto'];
@@ -149,6 +162,17 @@ while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
                 if(empty($displayDeadline) && !$isMantenimiento){
                     $displayDeadline = date('Y-m-d H:i:s', strtotime($row['fecha_creacion'] . ' + 48 hours'));
                 }
+
+                // ARREGLO FINAL: Creamos un JSON ultra seguro escapando apóstrofes y comillas en hexadecimal
+                $ticketArray = [
+                    'id' => $row['id'],
+                    'asunto' => $row['asunto'],
+                    'descripcion' => $row['descripcion'],
+                    'prioridad' => $row['prioridad'],
+                    'tipo' => $row['tipo'],
+                    'adjunto' => $row['archivo_adjunto'] ?? ''
+                ];
+                $ticketJsonSeguro = htmlspecialchars(json_encode($ticketArray, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
             ?>
             <div class="col-md-4">
                 <div class="card-ticket <?php echo $isMantenimiento ? 'card-mantenimiento' : ''; ?>" 
@@ -163,13 +187,19 @@ while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
                         <div id="timer-<?php echo $row['id']; ?>" class="timer-display">Cargando...</div>
                     </div>
                     
-                    <h5 class="fw-bold text-white mb-2"><?php echo htmlspecialchars($displayTitle); ?></h5>
+                    <h5 class="fw-bold text-white mb-2 text-truncate"><?php echo htmlspecialchars($displayTitle); ?></h5>
                     <p class="text-secondary small mb-1">Estado: <span class="text-info fw-bold"><?php echo $row['estado']; ?></span></p>
                     <p class="text-secondary small mb-3">Técnico: <span class="text-white"><?php echo $row['tecnico_nombre'] ?? 'Pendiente'; ?></span></p>
                     
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="small text-secondary"><i class="bi bi-person me-1"></i><?php echo htmlspecialchars($row['solicitante_nombre']); ?></span>
-                        <a href="javascript:void(0)" onclick="verDetalle(<?php echo $row['id']; ?>)" class="text-info small text-decoration-none fw-bold">Detalles ></a>
+                        <span class="small text-secondary text-truncate" style="max-width: 70%;"><i class="bi bi-person me-1"></i><?php echo htmlspecialchars($row['solicitante_nombre']); ?></span>
+                        
+                        <a href="javascript:void(0)" 
+                           onclick="verDetalle(this)" 
+                           data-ticket="<?php echo $ticketJsonSeguro; ?>"
+                           class="text-info small text-decoration-none fw-bold">
+                           Detalles >
+                        </a>
                     </div>
 
                     <?php if ($rol == 'administrador' || $rol == 'tecnico'): ?>
@@ -257,6 +287,142 @@ while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
         setInterval(updateTimers, 1000);
         updateTimers();
 
+        // --- DETALLE CON PREVISUALIZACIÓN DE ARCHIVOS TOTALMENTE SEGURO ---
+        function verDetalle(elemento) {
+            let ticket = {};
+            try {
+                // Recuperar y parsear el JSON de forma nativa sin romper el DOM
+                ticket = JSON.parse(elemento.getAttribute('data-ticket'));
+            } catch (e) {
+                console.error("Error al procesar los datos del ticket", e);
+                return;
+            }
+
+            let adjuntoHtml = `
+                <div class="py-2 text-muted small">
+                    <i class="bi bi-paperclip me-1" style="font-size: 1.2rem;"></i> Sin archivos adjuntos.
+                </div>`;
+
+            if (ticket.adjunto && ticket.adjunto.trim() !== "") {
+                const ext = ticket.adjunto.split('.').pop().toLowerCase();
+                const ruta = 'uploads/' + ticket.adjunto;
+                
+                if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) {
+                    adjuntoHtml = `
+                        <img src="${ruta}" alt="Adjunto" class="img-fluid rounded-2 mb-2" style="max-height: 160px; object-fit: contain; border: 1px solid rgba(255,255,255,0.1);">
+                        <br>
+                        <a href="${ruta}" target="_blank" class="btn btn-sm btn-outline-info fw-bold mt-1" style="font-size: 0.75rem; border-radius: 8px;">
+                            <i class="bi bi-eye me-1"></i> Ver Imagen Completa
+                        </a>`;
+                } else if (ext === 'pdf') {
+                    adjuntoHtml = `
+                        <div class="py-2">
+                            <i class="bi bi-file-earmark-pdf text-danger mb-2" style="font-size: 2.5rem;"></i>
+                            <p class="small text-white mb-2 text-truncate px-3">${ticket.adjunto}</p>
+                            <a href="${ruta}" target="_blank" class="btn btn-sm btn-outline-danger fw-bold" style="font-size: 0.75rem; border-radius: 8px;">
+                                <i class="bi bi-file-earmark-arrow-down me-1"></i> Abrir PDF
+                            </a>
+                        </div>`;
+                } else {
+                    adjuntoHtml = `
+                        <div class="py-2">
+                            <i class="bi bi-file-earmark-text text-info mb-2" style="font-size: 2.5rem;"></i>
+                            <p class="small text-white mb-2 text-truncate px-3">${ticket.adjunto}</p>
+                            <a href="${ruta}" target="_blank" class="btn btn-sm btn-outline-info fw-bold" style="font-size: 0.75rem; border-radius: 8px;">
+                                <i class="bi bi-download me-1"></i> Descargar Archivo
+                            </a>
+                        </div>`;
+                }
+            }
+
+            const htmlModal = `
+                <div class="modal-header border-bottom-0 pb-0" style="padding: 25px 25px 0 25px;">
+                    <h5 class="modal-title fw-bold text-white" style="font-family: 'Orbitron'; font-size: 1.1rem;">EDITAR TICKET #${ticket.id}</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" style="padding: 25px;">
+                    <form id="formEditarTicketBase">
+                        <input type="hidden" name="id" value="${ticket.id}">
+                        <input type="hidden" name="accion" value="editar_ticket_base">
+                        
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-secondary text-uppercase">Archivo Adjunto Cargado</label>
+                            <div class="p-3 text-center rounded-3" style="background: #0b0f1a; border: 1px solid rgba(255,255,255,0.05);">
+                                ${adjuntoHtml}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-secondary">TÍTULO / ASUNTO</label>
+                            <input type="text" class="form-control form-control-neo" value="${ticket.asunto}" readonly style="opacity: 0.7; background: #0b0f1a !important;">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-secondary">DESCRIPCIÓN</label>
+                            <textarea class="form-control form-control-neo" rows="3" readonly style="opacity: 0.7; background: #0b0f1a !important; font-size:0.9rem;">${ticket.descripcion}</textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-secondary">TIPO DE SOLICITUD</label>
+                            <select name="tipo" class="form-select form-control-neo" required style="background-color: #0f172a !important; color: white !important;">
+                                <option value="Incidencia" ${ticket.tipo === 'Incidencia' ? 'selected' : ''}>Incidencia (Algo falló)</option>
+                                <option value="Solicitud" ${ticket.tipo === 'Solicitud' ? 'selected' : ''}>Solicitud (Nuevo requerimiento)</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-secondary">PRIORIDAD</label>
+                            <div class="input-group">
+                                <span class="input-group-text input-group-text-neo" id="modal-termometro-icon" style="background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.08);">
+                                    <i class="bi bi-thermometer-half"></i>
+                                </span>
+                                <select name="prioridad" id="modalPrioridadSelect" class="form-select form-control-neo" required onchange="actualizarColorPrioridadModal()" style="background-color: #0f172a !important; color: white !important;">
+                                    <option value="Baja" ${ticket.prioridad === 'Baja' ? 'selected' : ''}>Baja</option>
+                                    <option value="Media" ${ticket.prioridad === 'Media' ? 'selected' : ''}>Media</option>
+                                    <option value="Alta" ${ticket.prioridad === 'Alta' ? 'selected' : ''}>Alta (Crítica)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2 pt-2">
+                            <button type="button" onclick="guardarCambiosTicketBase()" class="btn btn-info fw-bold w-100" style="border-radius: 12px; background: var(--accent); border: none; color: #0b0f1a; padding: 12px;">
+                                GUARDAR CAMBIOS
+                            </button>
+                            <button type="button" class="btn btn-secondary w-100" data-bs-dismiss="modal" style="border-radius: 12px; background: transparent; border: 1px solid #475569; color: #94a3b8; padding: 12px;">
+                                CANCELAR
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            
+            $('#modalContent').html(htmlModal);
+            (new bootstrap.Modal(document.getElementById('modalDetalle'))).show();
+            actualizarColorPrioridadModal();
+        }
+
+        function actualizarColorPrioridadModal() {
+            const select = document.getElementById('modalPrioridadSelect');
+            const icon = document.querySelector('#modal-termometro-icon i');
+            if(!select || !icon) return;
+            
+            const valor = select.value;
+            icon.style.color = (valor === 'Baja') ? '#10b981' : (valor === 'Media') ? '#f59e0b' : '#ef4444';
+        }
+
+        function guardarCambiosTicketBase() {
+            const fd = new FormData(document.getElementById('formEditarTicketBase'));
+            fetch('tickets_procesar.php', { method: 'POST', body: fd })
+            .then(r => r.json()).then(d => { 
+                if(d.status === 'success') {
+                    Swal.fire({ icon: 'success', title: 'Ticket Actualizado', background: '#161c2d', color: '#fff', showConfirmButton: false, timer: 1200 })
+                    .then(() => location.reload());
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Error', text: d.message, background: '#161c2d', color: '#fff' });
+                }
+            });
+        }
+
         async function extenderTiempo(id) {
             const { value: horas } = await Swal.fire({
                 title: 'EXTENDER PLAZO',
@@ -306,12 +472,6 @@ while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
                     Swal.fire({ icon: 'success', title: 'Ticket Actualizado', background: '#161c2d', color: '#fff', showConfirmButton: false, timer: 1200 })
                     .then(() => location.reload());
                 } 
-            });
-        }
-
-        function verDetalle(id) {
-            $('#modalContent').load('ticket_detalle.php?id=' + id, () => { 
-                (new bootstrap.Modal(document.getElementById('modalDetalle'))).show(); 
             });
         }
     </script>
