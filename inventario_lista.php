@@ -31,8 +31,10 @@ $query = "SELECT i.*, c.nombre AS categoria_nombre, u.nombre_completo AS nombre_
 
 $resultado = $conexion->query($query);
 
-// Consulta para categorías (Filtro)
+// Consulta para categorías (Filtro y Modal)
 $res_categorias = $conexion->query("SELECT * FROM categorias ORDER BY nombre ASC");
+// Obtenemos una copia para el modal de nuevo equipo
+$res_cat_modal = $conexion->query("SELECT * FROM categorias ORDER BY nombre ASC");
 
 // Consulta para lista de usuarios (Modal)
 $res_usuarios_modal = $conexion->query("SELECT id, nombre_completo FROM usuarios ORDER BY nombre_completo ASC");
@@ -165,7 +167,6 @@ while($u = $res_usuarios_modal->fetch_assoc()){
             letter-spacing: 0.5px;
         }
 
-        /* Colores dinámicos para los estados */
         .status-disponible { background: #10b981; color: #fff; border: 1px solid #059669; }
         .status-asignado { background: #3b82f6; color: #fff; border: 1px solid #2563eb; }
         .status-reparacion { background: #ef4444; color: #fff; border: 1px solid #dc2626; }
@@ -207,6 +208,12 @@ while($u = $res_usuarios_modal->fetch_assoc()){
         </div>
 
         <div class="search-container">
+            <div class="mb-3">
+                <button type="button" class="btn btn-info fw-bold" data-bs-toggle="modal" data-bs-target="#modalNuevo">
+                    <i class="bi bi-plus-circle"></i> Nuevo Equipo
+                </button>
+            </div>
+            
             <div class="row g-3">
                 <div class="col-md-9">
                     <input type="text" id="searchInput" class="form-control form-control-neo" placeholder="Buscar por marca, modelo, sector...">
@@ -227,7 +234,6 @@ while($u = $res_usuarios_modal->fetch_assoc()){
                 $estado_actual = $row['estado'] ?: 'Disponible';
                 $st_comp = mb_strtolower($estado_actual, 'UTF-8');
                 
-                // Lógica de clases CSS según el estado
                 $st_class = "status-disponible"; 
                 if ($st_comp === 'asignado') {
                     $st_class = "status-asignado";
@@ -288,6 +294,9 @@ while($u = $res_usuarios_modal->fetch_assoc()){
                                 <option value="Recursos Humanos">Recursos Humanos</option>
                                 <option value="Infraestructura">Infraestructura</option>
                                 <option value="Contabilidad">Contabilidad</option>
+                                <option value="Data Center">Data Center</option>
+                                <option value="Ventas">Ventas</option>
+                                <option value="Recepción">Recepción</option>
                             </select>
                         </div>
                         <div class="mb-3">
@@ -312,24 +321,109 @@ while($u = $res_usuarios_modal->fetch_assoc()){
         </div>
     </div>
 
+    <div class="modal fade" id="modalNuevo" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content shadow-lg">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title fw-bold" style="font-family: 'Orbitron';">NUEVO EQUIPO</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formNuevoEquipo">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="small text-secondary mb-1">CATEGORÍA</label>
+                                <select name="tipo_id" class="form-select form-control-neo" required>
+                                    <option value="" disabled selected>Seleccione una categoría</option>
+                                    <?php 
+                                    $res_cat_modal->data_seek(0);
+                                    while($cat = $res_cat_modal->fetch_assoc()): ?>
+                                        <option value="<?php echo $cat['id']; ?>"><?php echo $cat['nombre']; ?></option>
+                                    <?php endwhile; ?>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="small text-secondary mb-1">CÓDIGO PATRIMONIAL</label>
+                                <input type="text" name="codigo_patrimonial" class="form-control form-control-neo" placeholder="Ej: NBK-2026-001" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="small text-secondary mb-1">MARCA</label>
+                                <input type="text" name="marca" class="form-control form-control-neo" placeholder="Ej: Dell, Lenovo..." required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="small text-secondary mb-1">MODELO</label>
+                                <input type="text" name="modelo" class="form-control form-control-neo" placeholder="Ej: ThinkPad E14..." required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="small text-secondary mb-1">NÚMERO DE SERIE (OPCIONAL)</label>
+                                <input type="text" name="serie" class="form-control form-control-neo" placeholder="Ej: BR549XF...">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="small text-secondary mb-1">ESTADO INICIAL</label>
+                                <select name="estado" class="form-select form-control-neo" required>
+                                    <option value="Disponible" selected>Disponible</option>
+                                    <option value="Asignado">Asignado</option>
+                                    <option value="Reparación">Reparación</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="small text-secondary mb-1">SECTOR DEL EQUIPO</label>
+                                <select name="sector" class="form-select form-control-neo">
+                                    <option value="" selected>Sin definir / No aplica</option>
+                                    <option value="Administración">Administración</option>
+                                    <option value="Finanzas">Finanzas</option>
+                                    <option value="Legales">Legales</option>
+                                    <option value="Gerencia">Gerencia</option>
+                                    <option value="Sistemas">Sistemas</option>
+                                    <option value="Operaciones">Operaciones</option>
+                                    <option value="Recursos Humanos">Recursos Humanos</option>
+                                    <option value="Infraestructura">Infraestructura</option>
+                                    <option value="Contabilidad">Contabilidad</option>
+                                    <option value="Data Center">Data Center</option>
+                                    <option value="Ventas">Ventas</option>
+                                    <option value="Recepción">Recepción</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="small text-secondary mb-1">USUARIO ASIGNADO</label>
+                                <select name="usuario_id" class="form-select form-control-neo">
+                                    <option value="" selected>Sin asignar inicialmente</option>
+                                    <?php echo $usuarios_opciones; ?>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-info w-100 fw-bold py-2" style="font-family: 'Orbitron'; letter-spacing: 1px;">
+                                GUARDAR EQUIPO
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const modalEdit = new bootstrap.Modal(document.getElementById('modalEditar'));
+        const modalNuevo = new bootstrap.Modal(document.getElementById('modalNuevo'));
 
-        /**
-         * Carga los datos del activo en el formulario del modal.
-         */
         function abrirModalEditar(data) {
             document.getElementById('edit_id').value = data.id;
             document.getElementById('edit_sector').value = data.sector || '';
-            document.getElementById('edit_usuario').value = data.usuario_asignado_id || '';
+            document.getElementById('edit_usuario').value = data.usuario_assigned_id || '';
             document.getElementById('edit_estado').value = data.estado || 'Disponible';
             modalEdit.show();
         }
 
-        /**
-         * Lógica de búsqueda y filtrado por categoría.
-         */
         function filter() {
             const text = document.getElementById('searchInput').value.toLowerCase();
             const cat = document.getElementById('categoryFilter').value;
@@ -341,38 +435,29 @@ while($u = $res_usuarios_modal->fetch_assoc()){
         document.getElementById('searchInput').addEventListener('input', filter);
         document.getElementById('categoryFilter').addEventListener('change', filter);
 
-        /**
-         * Envío de datos mediante AJAX y actualización visual.
-         */
+        // Envío Editar
         document.getElementById('formUpdateInventario').onsubmit = function(e) {
             e.preventDefault();
-            const formData = new FormData(this);
-
-            fetch('inventario_update_proceso.php', { 
-                method: 'POST', 
-                body: formData 
-            })
-            .then(response => response.text())
-            .then(data => {
+            fetch('inventario_update_proceso.php', { method: 'POST', body: new FormData(this) })
+            .then(res => res.text()).then(data => {
                 if(data.trim() === "success") {
-                    Swal.fire({
-                        title: '¡Actualizado!',
-                        text: 'Los cambios se han guardado correctamente.',
-                        icon: 'success',
-                        background: '#1e293b', 
-                        color: '#fff', 
-                        confirmButtonColor: '#38bdf8'
-                    }).then(() => {
-                        // RECARGA NECESARIA: Permite que PHP genere las nuevas clases CSS de estado.
-                        location.reload(); 
-                    });
+                    location.reload();
                 } else {
-                    Swal.fire('Error', 'Servidor respondió: ' + data, 'error');
+                    Swal.fire('Error', data, 'error');
                 }
-            })
-            .catch(error => {
-                console.error("Error:", error);
-                Swal.fire('Error', 'No se pudo conectar con el servidor', 'error');
+            });
+        };
+
+        // Envío Nuevo
+        document.getElementById('formNuevoEquipo').onsubmit = function(e) {
+            e.preventDefault();
+            fetch('inventario_insert_proceso.php', { method: 'POST', body: new FormData(this) })
+            .then(res => res.text()).then(data => {
+                if(data.trim() === "success") {
+                    location.reload();
+                } else {
+                    Swal.fire('Error', data, 'error');
+                }
             });
         };
     </script>
