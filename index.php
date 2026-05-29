@@ -380,7 +380,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_recuperar'])) {
             </button>
             
             <div class="text-center">
-                <a href="#" class="text-decoration-none small text-white-50" style="transition:0.3s" onmouseover="this.style.color='#38bdf8'" onmouseout="this.style.color='rgba(255,255,255,0.5)'" data-bs-toggle="modal" data-bs-target="#modalRecuperar">Sincronizar nueva credencial</a>
+                <a href="#" class="text-decoration-none small text-white-50" style="transition:0.3s" onmouseover="this.style.color='#38bdf8'" onmouseout="this.style.color='rgba(255,255,255,0.5)'" data-bs-toggle="modal" data-bs-target="#modalRecuperar">¿Olvidaste tu contraseña?</a>
             </div>
         </form>
     </div>
