@@ -10,7 +10,14 @@ if (!isset($_SESSION['usuario'])) {
 
 $usuario_id = $_SESSION['usuario_id'];
 $rol = $_SESSION['rol'];
+
+// --- CAPTURA DE FILTROS Y BÚSQUEDA ---
 $filtro_estado = $_GET['estado'] ?? '';
+$filtro_depto = $_GET['departamento'] ?? ''; // Mantiene el nombre del parámetro GET para no romper el formulario antiguo
+$filtro_tipo = $_GET['tipo'] ?? '';
+$filtro_prioridad = $_GET['prioridad'] ?? '';
+$filtro_tecnico = $_GET['tecnico_id'] ?? '';
+$buscar = $_GET['buscar'] ?? '';
 
 // --- 1. LÓGICA DE CONTADORES ---
 $query_stats = "SELECT 
@@ -27,31 +34,61 @@ if ($rol != 'administrador' && $rol != 'tecnico') {
 $stats_res = $conexion->query($query_stats);
 $stats = $stats_res->fetch_assoc();
 
-// --- 2. CONSULTA DE TICKETS ---
-$sql = ($rol == 'administrador' || $rol == 'tecnico') 
-    ? "SELECT t.id, t.asunto, t.descripcion, t.prioridad, t.estado, t.tipo, t.fecha_creacion, t.fecha_limite,
-              t.fecha_mantenimiento, t.detalle_resolucion, t.archivo_adjunto,
-              u_sol.nombre_completo AS solicitante_nombre, u_tec.nombre_completo AS tecnico_nombre,
-              t.tecnico_id
-       FROM tickets t
-       JOIN usuarios u_sol ON t.solicitante_id = u_sol.id
-       LEFT JOIN usuarios u_tec ON t.tecnico_id = u_tec.id" 
-    : "SELECT t.id, t.asunto, t.descripcion, t.prioridad, t.estado, t.tipo, t.fecha_creacion, t.fecha_limite,
-              t.fecha_mantenimiento, t.detalle_resolucion, t.archivo_adjunto,
-              u_sol.nombre_completo AS solicitante_nombre 
-       FROM tickets t
-       JOIN usuarios u_sol ON t.solicitante_id = u_sol.id
-       WHERE t.solicitante_id = $usuario_id";
-
-if (!empty($filtro_estado)) {
-    $sql .= (strpos($sql, 'WHERE') !== false) ? " AND t.estado = '$filtro_estado'" : " WHERE t.estado = '$filtro_estado'";
+// --- 2. CONSULTA DE TICKETS CON FILTROS DINÁMICOS ---
+if ($rol == 'administrador' || $rol == 'tecnico') {
+    $sql = "SELECT t.id, t.asunto, t.descripcion, t.prioridad, t.estado, t.tipo, t.fecha_creacion, t.fecha_limite,
+                  t.fecha_mantenimiento, t.detalle_resolucion, t.archivo_adjunto,
+                  u_sol.nombre_completo AS solicitante_nombre, u_sol.area AS solicitante_depto, 
+                  u_tec.nombre_completo AS tecnico_nombre, t.tecnico_id
+           FROM tickets t
+           JOIN usuarios u_sol ON t.solicitante_id = u_sol.id
+           LEFT JOIN usuarios u_tec ON t.tecnico_id = u_tec.id 
+           WHERE 1=1";
+} else {
+    $sql = "SELECT t.id, t.asunto, t.descripcion, t.prioridad, t.estado, t.tipo, t.fecha_creacion, t.fecha_limite,
+                  t.fecha_mantenimiento, t.detalle_resolucion, t.archivo_adjunto,
+                  u_sol.nombre_completo AS solicitante_nombre, u_sol.area AS solicitante_depto,
+                  'N/A' as tecnico_nombre, t.tecnico_id
+           FROM tickets t
+           JOIN usuarios u_sol ON t.solicitante_id = u_sol.id
+           WHERE t.solicitante_id = $usuario_id";
 }
+
+// Aplicación de condiciones Query de forma dinámica y segura
+if (!empty($filtro_estado)) {
+    $sql .= " AND t.estado = '" . $conexion->real_escape_string($filtro_estado) . "'";
+}
+if (!empty($filtro_depto)) {
+    $sql .= " AND u_sol.area = '" . $conexion->real_escape_string($filtro_depto) . "'";
+}
+if (!empty($filtro_tipo)) {
+    $sql .= " AND t.tipo = '" . $conexion->real_escape_string($filtro_tipo) . "'";
+}
+if (!empty($filtro_prioridad)) {
+    $sql .= " AND t.prioridad = '" . $conexion->real_escape_string($filtro_prioridad) . "'";
+}
+if (!empty($filtro_tecnico)) {
+    $sql .= " AND t.tecnico_id = '" . $conexion->real_escape_string($filtro_tecnico) . "'";
+}
+if (!empty($buscar)) {
+    $b = $conexion->real_escape_string($buscar);
+    $sql .= " AND (t.id LIKE '%$b%' OR t.asunto LIKE '%$b%' OR t.descripcion LIKE '%$b%' OR u_sol.nombre_completo LIKE '%$b%')";
+}
+
 $sql .= " ORDER BY t.fecha_creacion DESC";
 $res = $conexion->query($sql);
 
+// Carga de Técnicos para el Filtro
 $tecnicos_res = $conexion->query("SELECT id, nombre_completo FROM usuarios WHERE rol = 'tecnico'");
 $tecnicos = [];
 while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
+
+// Carga de Áreas (Departamentos) existentes para el Filtro buscando en la columna correcta 'area'
+$deptos_res = $conexion->query("SELECT DISTINCT area FROM usuarios WHERE area IS NOT NULL AND area != ''");
+$departamentos = [];
+if($deptos_res) {
+    while ($d = $deptos_res->fetch_assoc()) { $departamentos[] = $d['area']; }
+}
 ?>
 
 <!DOCTYPE html>
@@ -94,16 +131,17 @@ while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
         
         .form-control-neo { background: rgba(15, 23, 42, 0.8) !important; border: 1px solid var(--glass-border) !important; color: #ffffff !important; border-radius: 12px; padding: 12px; }
         .form-control-neo:focus { box-shadow: 0 0 0 2px var(--accent-soft); border-color: var(--accent) !important; }
+        
+        .form-select-neo { background: rgba(15, 23, 42, 0.8) url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e") no-repeat right 0.75rem center/16px 12px !important; border: 1px solid var(--glass-border) !important; color: #ffffff !important; border-radius: 12px; padding: 10px; font-size: 0.85rem; }
+        .form-select-neo:focus { box-shadow: 0 0 0 2px var(--accent-soft); border-color: var(--accent) !important; }
+        .form-select-neo option { background-color: #0f172a !important; color: white !important; }
 
-        .swal2-select {
-            background-color: #0f172a !important;
-            color: white !important;
-            border: 1px solid rgba(255,255,255,0.2) !important;
-        }
-        .swal2-select option {
-            background-color: #0f172a !important;
-            color: white !important;
-        }
+        .search-wrapper-neo { position: relative; }
+        .search-wrapper-neo i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-gray); }
+        .search-wrapper-neo input { padding-left: 38px !important; }
+
+        .swal2-select { background-color: #0f172a !important; color: white !important; border: 1px solid rgba(255,255,255,0.2) !important; }
+        .swal2-select option { background-color: #0f172a !important; color: white !important; }
 
         @keyframes pulse-red {
             0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2); }
@@ -134,8 +172,72 @@ while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
 
     <div class="container pb-5">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 style="font-family: 'Orbitron'; font-weight: bold;">TICKETS</h2>
-            <a href="tickets_crear.php" class="btn btn-info fw-bold" style="border-radius: 12px; background: var(--accent); border:none;">+ NUEVO TICKET</a>
+            <h2 style="font-family: 'Orbitron'; font-weight: bold;">TICKETS <?php echo !empty($filtro_estado) ? ' - '.strtoupper($filtro_estado) : ''; ?></h2>
+            <div class="d-flex gap-2">
+                <button onclick="solicitarReporte()" class="btn btn-outline-light fw-bold" style="border-radius: 12px; border: 1px solid var(--glass-border);">
+                    <i class="bi bi-download me-1"></i> REPORTES
+                </button>
+                <a href="tickets_crear.php" class="btn btn-info fw-bold" style="border-radius: 12px; background: var(--accent); border:none;">+ NUEVO TICKET</a>
+            </div>
+        </div>
+
+        <div class="p-4 mb-4 rounded-4" style="background: var(--card-bg); border: 1px solid rgba(255,255,255,0.05);">
+            <form method="GET" action="tickets_lista.php" id="formFiltros" class="row g-3 align-items-end">
+                <input type="hidden" name="estado" value="<?php echo htmlspecialchars($filtro_estado); ?>">
+                
+                <div class="col-md-3">
+                    <div class="search-wrapper-neo">
+                        <i class="bi bi-search"></i>
+                        <input type="text" name="buscar" class="form-control form-control-neo" placeholder="Buscar ID, asunto..." value="<?php echo htmlspecialchars($buscar); ?>">
+                    </div>
+                </div>
+
+                <div class="col-md-2">
+                    <select name="departamento" class="form-select form-select-neo">
+                        <option value="">[Área / Depto]</option>
+                        <?php foreach($departamentos as $d): ?>
+                            <option value="<?php echo htmlspecialchars($d); ?>" <?php echo $filtro_depto === $d ? 'selected' : ''; ?>><?php echo htmlspecialchars($d); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <select name="tipo" class="form-select form-select-neo">
+                        <option value="">[Incidencia / Tipo]</option>
+                        <option value="Incidencia" <?php echo $filtro_tipo === 'Incidencia' ? 'selected' : ''; ?>>Incidencia</option>
+                        <option value="Solicitud" <?php echo $filtro_tipo === 'Solicitud' ? 'selected' : ''; ?>>Solicitud</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <select name="prioridad" class="form-select form-select-neo">
+                        <option value="">[Prioridad]</option>
+                        <option value="Baja" <?php echo $filtro_prioridad === 'Baja' ? 'selected' : ''; ?>>Baja</option>
+                        <option value="Media" <?php echo $filtro_prioridad === 'Media' ? 'selected' : ''; ?>>Media</option>
+                        <option value="Alta" <?php echo $filtro_prioridad === 'Alta' ? 'selected' : ''; ?>>Alta</option>
+                    </select>
+                </div>
+
+                <?php if ($rol == 'administrador' || $rol == 'tecnico'): ?>
+                <div class="col-md-2">
+                    <select name="tecnico_id" class="form-select form-select-neo">
+                        <option value="">[Técnico Asignado]</option>
+                        <?php foreach($tecnicos as $t): ?>
+                            <option value="<?php echo $t['id']; ?>" <?php echo $filtro_tecnico == $t['id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($t['nombre_completo']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php endif; ?>
+
+                <div class="col-md d-flex gap-2">
+                    <button type="submit" class="btn btn-info w-100 fw-bold" style="border-radius:12px; background: var(--accent); border:none; height:45px;">
+                        Filtrar
+                    </button>
+                    <a href="tickets_lista.php" class="btn btn-secondary fw-bold d-flex align-items-center justify-content-center" style="border-radius:12px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); width:50px; height:45px;" title="Limpiar Filtros">
+                        <i class="bi bi-trash"></i>
+                    </a>
+                </div>
+            </form>
         </div>
 
         <div class="row g-3 mb-5">
@@ -163,7 +265,6 @@ while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
                     $displayDeadline = date('Y-m-d H:i:s', strtotime($row['fecha_creacion'] . ' + 48 hours'));
                 }
 
-                // ARREGLO FINAL: Creamos un JSON ultra seguro escapando apóstrofes y comillas en hexadecimal
                 $ticketArray = [
                     'id' => $row['id'],
                     'asunto' => $row['asunto'],
@@ -189,7 +290,8 @@ while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
                     
                     <h5 class="fw-bold text-white mb-2 text-truncate"><?php echo htmlspecialchars($displayTitle); ?></h5>
                     <p class="text-secondary small mb-1">Estado: <span class="text-info fw-bold"><?php echo $row['estado']; ?></span></p>
-                    <p class="text-secondary small mb-3">Técnico: <span class="text-white"><?php echo $row['tecnico_nombre'] ?? 'Pendiente'; ?></span></p>
+                    <p class="text-secondary small mb-1">Técnico: <span class="text-white"><?php echo $row['tecnico_nombre'] ?? 'Pendiente'; ?></span></p>
+                    <p class="text-secondary small mb-3" style="font-size:0.75rem;">Área: <span class="text-info"><?php echo htmlspecialchars($row['solicitante_depto'] ?? 'General'); ?></span></p>
                     
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <span class="small text-secondary text-truncate" style="max-width: 70%;"><i class="bi bi-person me-1"></i><?php echo htmlspecialchars($row['solicitante_nombre']); ?></span>
@@ -287,51 +389,27 @@ while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
         setInterval(updateTimers, 1000);
         updateTimers();
 
-        // --- DETALLE CON PREVISUALIZACIÓN DE ARCHIVOS TOTALMENTE SEGURO ---
         function verDetalle(elemento) {
             let ticket = {};
             try {
-                // Recuperar y parsear el JSON de forma nativa sin romper el DOM
                 ticket = JSON.parse(elemento.getAttribute('data-ticket'));
             } catch (e) {
                 console.error("Error al procesar los datos del ticket", e);
                 return;
             }
 
-            let adjuntoHtml = `
-                <div class="py-2 text-muted small">
-                    <i class="bi bi-paperclip me-1" style="font-size: 1.2rem;"></i> Sin archivos adjuntos.
-                </div>`;
+            let adjuntoHtml = `<div class="py-2 text-muted small"><i class="bi bi-paperclip me-1" style="font-size: 1.2rem;"></i> Sin archivos adjuntos.</div>`;
 
             if (ticket.adjunto && ticket.adjunto.trim() !== "") {
                 const ext = ticket.adjunto.split('.').pop().toLowerCase();
                 const ruta = 'uploads/' + ticket.adjunto;
                 
                 if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) {
-                    adjuntoHtml = `
-                        <img src="${ruta}" alt="Adjunto" class="img-fluid rounded-2 mb-2" style="max-height: 160px; object-fit: contain; border: 1px solid rgba(255,255,255,0.1);">
-                        <br>
-                        <a href="${ruta}" target="_blank" class="btn btn-sm btn-outline-info fw-bold mt-1" style="font-size: 0.75rem; border-radius: 8px;">
-                            <i class="bi bi-eye me-1"></i> Ver Imagen Completa
-                        </a>`;
+                    adjuntoHtml = `<img src="${ruta}" alt="Adjunto" class="img-fluid rounded-2 mb-2" style="max-height: 160px; object-fit: contain; border: 1px solid rgba(255,255,255,0.1);"><br><a href="${ruta}" target="_blank" class="btn btn-sm btn-outline-info fw-bold mt-1" style="font-size: 0.75rem; border-radius: 8px;"><i class="bi bi-eye me-1"></i> Ver Imagen Completa</a>`;
                 } else if (ext === 'pdf') {
-                    adjuntoHtml = `
-                        <div class="py-2">
-                            <i class="bi bi-file-earmark-pdf text-danger mb-2" style="font-size: 2.5rem;"></i>
-                            <p class="small text-white mb-2 text-truncate px-3">${ticket.adjunto}</p>
-                            <a href="${ruta}" target="_blank" class="btn btn-sm btn-outline-danger fw-bold" style="font-size: 0.75rem; border-radius: 8px;">
-                                <i class="bi bi-file-earmark-arrow-down me-1"></i> Abrir PDF
-                            </a>
-                        </div>`;
+                    adjuntoHtml = `<div class="py-2"><i class="bi bi-file-earmark-pdf text-danger mb-2" style="font-size: 2.5rem;"></i><p class="small text-white mb-2 text-truncate px-3">${ticket.adjunto}</p><a href="${ruta}" target="_blank" class="btn btn-sm btn-outline-danger fw-bold" style="font-size: 0.75rem; border-radius: 8px;"><i class="bi bi-file-earmark-arrow-down me-1"></i> Abrir PDF</a></div>`;
                 } else {
-                    adjuntoHtml = `
-                        <div class="py-2">
-                            <i class="bi bi-file-earmark-text text-info mb-2" style="font-size: 2.5rem;"></i>
-                            <p class="small text-white mb-2 text-truncate px-3">${ticket.adjunto}</p>
-                            <a href="${ruta}" target="_blank" class="btn btn-sm btn-outline-info fw-bold" style="font-size: 0.75rem; border-radius: 8px;">
-                                <i class="bi bi-download me-1"></i> Descargar Archivo
-                            </a>
-                        </div>`;
+                    adjuntoHtml = `<div class="py-2"><i class="bi bi-file-earmark-text text-info mb-2" style="font-size: 2.5rem;"></i><p class="small text-white mb-2 text-truncate px-3">${ticket.adjunto}</p><a href="${ruta}" target="_blank" class="btn btn-sm btn-outline-info fw-bold" style="font-size: 0.75rem; border-radius: 8px;"><i class="bi bi-download me-1"></i> Descargar Archivo</a></div>`;
                 }
             }
 
@@ -385,16 +463,11 @@ while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
                         </div>
 
                         <div class="d-flex gap-2 pt-2">
-                            <button type="button" onclick="guardarCambiosTicketBase()" class="btn btn-info fw-bold w-100" style="border-radius: 12px; background: var(--accent); border: none; color: #0b0f1a; padding: 12px;">
-                                GUARDAR CAMBIOS
-                            </button>
-                            <button type="button" class="btn btn-secondary w-100" data-bs-dismiss="modal" style="border-radius: 12px; background: transparent; border: 1px solid #475569; color: #94a3b8; padding: 12px;">
-                                CANCELAR
-                            </button>
+                            <button type="button" onclick="guardarCambiosTicketBase()" class="btn btn-info fw-bold w-100" style="border-radius: 12px; background: var(--accent); border: none; color: #0b0f1a; padding: 12px;"> GUARDAR CAMBIOS </button>
+                            <button type="button" class="btn btn-secondary w-100" data-bs-dismiss="modal" style="border-radius: 12px; background: transparent; border: 1px solid #475569; color: #94a3b8; padding: 12px;"> CANCELAR </button>
                         </div>
                     </form>
-                </div>
-            `;
+                </div>`;
             
             $('#modalContent').html(htmlModal);
             (new bootstrap.Modal(document.getElementById('modalDetalle'))).show();
@@ -405,7 +478,6 @@ while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
             const select = document.getElementById('modalPrioridadSelect');
             const icon = document.querySelector('#modal-termometro-icon i');
             if(!select || !icon) return;
-            
             const valor = select.value;
             icon.style.color = (valor === 'Baja') ? '#10b981' : (valor === 'Media') ? '#f59e0b' : '#ef4444';
         }
@@ -415,8 +487,7 @@ while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
             fetch('tickets_procesar.php', { method: 'POST', body: fd })
             .then(r => r.json()).then(d => { 
                 if(d.status === 'success') {
-                    Swal.fire({ icon: 'success', title: 'Ticket Actualizado', background: '#161c2d', color: '#fff', showConfirmButton: false, timer: 1200 })
-                    .then(() => location.reload());
+                    Swal.fire({ icon: 'success', title: 'Ticket Actualizado', background: '#161c2d', color: '#fff', showConfirmButton: false, timer: 1200 }).then(() => location.reload());
                 } else {
                     Swal.fire({ icon: 'error', title: 'Error', text: d.message, background: '#161c2d', color: '#fff' });
                 }
@@ -469,9 +540,41 @@ while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
             fetch('tickets_procesar.php', { method: 'POST', body: fd })
             .then(r => r.json()).then(d => { 
                 if(d.status === 'success') {
-                    Swal.fire({ icon: 'success', title: 'Ticket Actualizado', background: '#161c2d', color: '#fff', showConfirmButton: false, timer: 1200 })
-                    .then(() => location.reload());
+                    Swal.fire({ icon: 'success', title: 'Ticket Actualizado', background: '#161c2d', color: '#fff', showConfirmButton: false, timer: 1200 }).then(() => location.reload());
                 } 
+            });
+        }
+
+        // --- SOLICITUD DE REPORTE CON LOS FILTROS SELECCIONADOS ACTUALES ---
+        function solicitarReporte() {
+            Swal.fire({
+                title: 'EXPORTAR REPORTE',
+                text: '¿En qué formato deseas descargar el listado con tus filtros actuales?',
+                icon: 'question',
+                background: '#161c2d',
+                color: '#fff',
+                showCancelButton: true,
+                showDenyButton: true,
+                confirmButtonColor: '#10b981',
+                denyButtonColor: '#38bdf8',
+                cancelButtonColor: '#475569',
+                confirmButtonText: '<i class="bi bi-file-earmark-excel"></i> Excel',
+                denyButtonText: '<i class="bi bi-file-earmark-pdf"></i> PDF',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                let formato = '';
+                if (result.isConfirmed) formato = 'excel';
+                else if (result.isDenied) formato = 'pdf';
+                else return;
+
+                // Capturar el estado de los inputs actuales del formulario para pasárselos al reporteador
+                const formElement = document.getElementById('formFiltros');
+                const formData = new FormData(formElement);
+                const params = new URLSearchParams(formData);
+                params.append('formato', formato);
+
+                // Redirigir al archivo generador con toda la query armada de filtros de pantalla
+                window.location.href = `tickets_reporte.php?${params.toString()}`;
             });
         }
     </script>
