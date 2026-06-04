@@ -5,11 +5,14 @@ require_once 'db.php';
 // Establecer el encabezado para respuesta JSON
 header('Content-Type: application/json');
 
-// 1. Verificación de seguridad y permisos
-if (!isset($_SESSION['usuario']) || !in_array($_SESSION['rol'], ['administrador', 'tecnico'])) {
+// 1. Verificación de seguridad básica (Debe estar logueado)
+if (!isset($_SESSION['usuario'])) {
     echo json_encode(['status' => 'error', 'message' => 'Acceso denegado: No autorizado']);
     exit();
 }
+
+$usuario_id = $_SESSION['usuario_id'];
+$rol = $_SESSION['rol'];
 
 // 2. Procesamiento de la solicitud POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -21,9 +24,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
+    // Restricción de acciones administrativas/técnicas
+    $acciones_staff = ['asignar', 'extender_tiempo', 'mantenimiento', 'resolver', 'editar_basico'];
+    if (in_array($accion, $acciones_staff) && $rol !== 'administrador' && $rol !== 'tecnico') {
+        echo json_encode(['status' => 'error', 'message' => 'No tiene permisos para realizar esta acción']);
+        exit();
+    }
+
     $stmt = null;
 
     switch ($accion) {
+        // ACCIÓN: EDITAR TIPO Y PRIORIDAD DESDE EL MODAL DE DETALLES
+        case 'editar_ticket_base':
+            $tipo = $_POST['tipo'] ?? '';
+            $prioridad = $_POST['prioridad'] ?? '';
+
+            if (empty($tipo) || empty($prioridad)) {
+                echo json_encode(['status' => 'error', 'message' => 'El tipo de solicitud y la prioridad son obligatorios']);
+                exit();
+            }
+
+            // Si es un usuario común, asegurarnos en la query que el ticket sea de su propiedad por seguridad
+            if ($rol !== 'administrador' && $rol !== 'tecnico') {
+                $stmt = $conexion->prepare("UPDATE tickets SET tipo = ?, prioridad = ? WHERE id = ? AND solicitante_id = ?");
+                $stmt->bind_param("ssii", $tipo, $prioridad, $id, $usuario_id);
+            } else {
+                $stmt = $conexion->prepare("UPDATE tickets SET tipo = ?, prioridad = ? WHERE id = ?");
+                $stmt->bind_param("ssi", $tipo, $prioridad, $id);
+            }
+            break;
+
         // ACCIÓN: ASIGNAR TÉCNICO
         case 'asignar':
             if (!isset($_POST['tecnico_id'])) {
@@ -101,7 +131,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // 3. Ejecución y respuesta
     if ($stmt && $stmt->execute()) {
-        echo json_encode(['status' => 'success']);
+        // Validar si realmente se modificó una fila (por ejemplo, si el ID no correspondía al usuario)
+        if ($stmt->affected_rows === 0 && $accion === 'editar_ticket_base') {
+            echo json_encode(['status' => 'error', 'message' => 'No se realizaron cambios o no tiene permisos sobre este ticket']);
+        } else {
+            echo json_encode(['status' => 'success']);
+        }
     } else {
         $errorMsg = $stmt ? $stmt->error : $conexion->error;
         echo json_encode(['status' => 'error', 'message' => 'Error en la base de datos: ' . $errorMsg]);

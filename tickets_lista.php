@@ -33,7 +33,6 @@ $query_stats = "SELECT
 if ($rol != 'administrador' && $rol != 'tecnico') {
     $query_stats .= " AND solicitante_id = $usuario_id";
 }
-// Aplicar rango de fechas también a los contadores si se desea que reflejen el período
 if (!empty($filtro_fecha_desde)) {
     $query_stats .= " AND DATE(fecha_creacion) >= '" . $conexion->real_escape_string($filtro_fecha_desde) . "'";
 }
@@ -47,7 +46,7 @@ $stats = $stats_res->fetch_assoc();
 // --- 2. CONSULTA DE TICKETS CON FILTROS DINÁMICOS ---
 if ($rol == 'administrador' || $rol == 'tecnico') {
     $sql = "SELECT t.id, t.asunto, t.descripcion, t.prioridad, t.estado, t.tipo, t.fecha_creacion, t.fecha_limite,
-                  t.fecha_mantenimiento, t.detalle_resolucion, t.archivo_adjunto,
+                  t.fecha_mantenimiento, t.detalle_resolucion, t.archivo_adjunto, t.archivo_nombre, t.archivo_tipo,
                   u_sol.nombre_completo AS solicitante_nombre, u_sol.area AS solicitante_depto, 
                   u_tec.nombre_completo AS tecnico_nombre, t.tecnico_id
            FROM tickets t
@@ -56,7 +55,7 @@ if ($rol == 'administrador' || $rol == 'tecnico') {
            WHERE 1=1";
 } else {
     $sql = "SELECT t.id, t.asunto, t.descripcion, t.prioridad, t.estado, t.tipo, t.fecha_creacion, t.fecha_limite,
-                  t.fecha_mantenimiento, t.detalle_resolucion, t.archivo_adjunto,
+                  t.fecha_mantenimiento, t.detalle_resolucion, t.archivo_adjunto, t.archivo_nombre, t.archivo_tipo,
                   u_sol.nombre_completo AS solicitante_nombre, u_sol.area AS solicitante_depto,
                   'N/A' as tecnico_nombre, t.tecnico_id
            FROM tickets t
@@ -64,7 +63,6 @@ if ($rol == 'administrador' || $rol == 'tecnico') {
            WHERE t.solicitante_id = $usuario_id";
 }
 
-// Aplicación de condiciones Query de forma dinámica y segura
 if (!empty($filtro_estado)) {
     $sql .= " AND t.estado = '" . $conexion->real_escape_string($filtro_estado) . "'";
 }
@@ -94,12 +92,10 @@ if (!empty($buscar)) {
 $sql .= " ORDER BY t.fecha_creacion DESC";
 $res = $conexion->query($sql);
 
-// Carga de Técnicos para el Filtro
 $tecnicos_res = $conexion->query("SELECT id, nombre_completo FROM usuarios WHERE rol = 'tecnico'");
 $tecnicos = [];
 while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
 
-// Carga de Áreas (Departamentos) existentes para el Filtro buscando en la columna correcta 'area'
 $deptos_res = $conexion->query("SELECT DISTINCT area FROM usuarios WHERE area IS NOT NULL AND area != ''");
 $departamentos = [];
 if($deptos_res) {
@@ -155,7 +151,6 @@ if($deptos_res) {
         .search-wrapper-neo { position: relative; }
         .search-wrapper-neo i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-gray); }
         .search-wrapper-neo input { padding-left: 38px !important; }
-
         .swal2-select { background-color: #0f172a !important; color: white !important; border: 1px solid rgba(255,255,255,0.2) !important; }
         .swal2-select option { background-color: #0f172a !important; color: white !important; }
 
@@ -201,7 +196,6 @@ if($deptos_res) {
 
         <div class="p-4 mb-4 rounded-4" style="background: var(--card-bg); border: 1px solid rgba(255,255,255,0.05);">
             <form method="GET" action="tickets_lista.php" id="formFiltros" class="row g-3 align-items-end">
-                
                 <div class="col-md-3">
                     <span class="label-date-neo">Término de búsqueda</span>
                     <div class="search-wrapper-neo">
@@ -276,9 +270,7 @@ if($deptos_res) {
                 <?php endif; ?>
 
                 <div class="col-md d-flex gap-2">
-                    <button type="submit" class="btn btn-info w-100 fw-bold" style="border-radius:12px; background: var(--accent); border:none; height:45px;">
-                        Filtrar
-                    </button>
+                    <button type="submit" class="btn btn-info w-100 fw-bold" style="border-radius:12px; background: var(--accent); border:none; height:45px;">Filtrar</button>
                     <a href="tickets_lista.php" class="btn btn-secondary fw-bold d-flex align-items-center justify-content-center" style="border-radius:12px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); width:50px; height:45px;" title="Limpiar Filtros">
                         <i class="bi bi-trash"></i>
                     </a>
@@ -317,7 +309,9 @@ if($deptos_res) {
                     'descripcion' => $row['descripcion'],
                     'prioridad' => $row['prioridad'],
                     'tipo' => $row['tipo'],
-                    'adjunto' => $row['archivo_adjunto'] ?? ''
+                    'adjunto' => !empty($row['archivo_adjunto']) ? true : false,
+                    'archivo_nombre' => $row['archivo_nombre'] ?? '',
+                    'archivo_tipo' => $row['archivo_tipo'] ?? ''
                 ];
                 $ticketJsonSeguro = htmlspecialchars(json_encode($ticketArray, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
             ?>
@@ -341,29 +335,15 @@ if($deptos_res) {
                     
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <span class="small text-secondary text-truncate" style="max-width: 70%;"><i class="bi bi-person me-1"></i><?php echo htmlspecialchars($row['solicitante_nombre']); ?></span>
-                        
-                        <a href="javascript:void(0)" 
-                           onclick="verDetalle(this)" 
-                           data-ticket="<?php echo $ticketJsonSeguro; ?>"
-                           class="text-info small text-decoration-none fw-bold">
-                           Detalles >
-                        </a>
+                        <a href="javascript:void(0)" onclick="verDetalle(this)" data-ticket="<?php echo $ticketJsonSeguro; ?>" class="text-info small text-decoration-none fw-bold">Detalles ></a>
                     </div>
 
                     <?php if ($rol == 'administrador' || $rol == 'tecnico'): ?>
                     <div class="btn-action-group">
-                        <div onclick="asignarTicket(<?php echo $row['id']; ?>)" class="btn-action-card">
-                            <i class="bi bi-person-plus text-info"></i><span>Asignar</span>
-                        </div>
-                        <div onclick="extenderTiempo(<?php echo $row['id']; ?>)" class="btn-action-card">
-                            <i class="bi bi-clock-history text-primary"></i><span>+Tiempo</span>
-                        </div>
-                        <div onclick="resolverTicket(<?php echo $row['id']; ?>)" class="btn-action-card">
-                            <i class="bi bi-check2-circle text-success"></i><span>Resolver</span>
-                        </div>
-                        <div onclick="mantenimientoTicket(<?php echo $row['id']; ?>)" class="btn-action-card">
-                            <i class="bi bi-tools text-warning"></i><span>Mante.</span>
-                        </div>
+                        <div onclick="asignarTicket(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-person-plus text-info"></i><span>Asignar</span></div>
+                        <div onclick="extenderTiempo(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-clock-history text-primary"></i><span>+Tiempo</span></div>
+                        <div onclick="resolverTicket(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-check2-circle text-success"></i><span>Resolver</span></div>
+                        <div onclick="mantenimientoTicket(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-tools text-warning"></i><span>Mante.</span></div>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -446,16 +426,36 @@ if($deptos_res) {
 
             let adjuntoHtml = `<div class="py-2 text-muted small"><i class="bi bi-paperclip me-1" style="font-size: 1.2rem;"></i> Sin archivos adjuntos.</div>`;
 
-            if (ticket.adjunto && ticket.adjunto.trim() !== "") {
-                const ext = ticket.adjunto.split('.').pop().toLowerCase();
-                const ruta = 'uploads/' + ticket.adjunto;
-                
-                if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) {
-                    adjuntoHtml = `<img src="${ruta}" alt="Adjunto" class="img-fluid rounded-2 mb-2" style="max-height: 160px; object-fit: contain; border: 1px solid rgba(255,255,255,0.1);"><br><a href="${ruta}" target="_blank" class="btn btn-sm btn-outline-info fw-bold mt-1" style="font-size: 0.75rem; border-radius: 8px;"><i class="bi bi-eye me-1"></i> Ver Imagen Completa</a>`;
-                } else if (ext === 'pdf') {
-                    adjuntoHtml = `<div class="py-2"><i class="bi bi-file-earmark-pdf text-danger mb-2" style="font-size: 2.5rem;"></i><p class="small text-white mb-2 text-truncate px-3">${ticket.adjunto}</p><a href="${ruta}" target="_blank" class="btn btn-sm btn-outline-danger fw-bold" style="font-size: 0.75rem; border-radius: 8px;"><i class="bi bi-file-earmark-arrow-down me-1"></i> Abrir PDF</a></div>`;
+            if (ticket.adjunto) {
+                const rutaControlador = `ver_adjunto.php?id=${ticket.id}`;
+                const tipoMime = ticket.archivo_tipo.toLowerCase();
+                const nombreArchivo = ticket.archivo_nombre;
+
+                if (tipoMime.includes('image/png') || tipoMime.includes('image/jpeg') || tipoMime.includes('image/jpg')) {
+                    adjuntoHtml = `
+                        <img src="${rutaControlador}" alt="Adjunto" class="img-fluid rounded-2 mb-2" style="max-height: 180px; object-fit: contain; border: 1px solid rgba(255,255,255,0.1);"><br>
+                        <p class="small text-muted mb-1 text-truncate px-2">${nombreArchivo}</p>
+                        <a href="${rutaControlador}" target="_blank" class="btn btn-sm btn-outline-info fw-bold mt-1" style="font-size: 0.75rem; border-radius: 8px;">
+                            <i class="bi bi-eye me-1"></i> Ver Imagen Completa
+                        </a>`;
+                } else if (tipoMime.includes('pdf')) {
+                    adjuntoHtml = `
+                        <div class="py-2">
+                            <i class="bi bi-file-earmark-pdf text-danger mb-2" style="font-size: 2.5rem;"></i>
+                            <p class="small text-white mb-2 text-truncate px-3">${nombreArchivo}</p>
+                            <a href="${rutaControlador}" target="_blank" class="btn btn-sm btn-outline-danger fw-bold" style="font-size: 0.75rem; border-radius: 8px;">
+                                <i class="bi bi-file-earmark-arrow-down me-1"></i> Abrir / Ver PDF
+                            </a>
+                        </div>`;
                 } else {
-                    adjuntoHtml = `<div class="py-2"><i class="bi bi-file-earmark-text text-info mb-2" style="font-size: 2.5rem;"></i><p class="small text-white mb-2 text-truncate px-3">${ticket.adjunto}</p><a href="${ruta}" target="_blank" class="btn btn-sm btn-outline-info fw-bold" style="font-size: 0.75rem; border-radius: 8px;"><i class="bi bi-download me-1"></i> Descargar Archivo</a></div>`;
+                    adjuntoHtml = `
+                        <div class="py-2">
+                            <i class="bi bi-file-earmark-text text-info mb-2" style="font-size: 2.5rem;"></i>
+                            <p class="small text-white mb-2 text-truncate px-3">${nombreArchivo}</p>
+                            <a href="${rutaControlador}" download="${nombreArchivo}" class="btn btn-sm btn-outline-info fw-bold" style="font-size: 0.75rem; border-radius: 8px;">
+                                <i class="bi bi-download me-1"></i> Descargar Archivo Real
+                            </a>
+                        </div>`;
                 }
             }
 
@@ -465,9 +465,9 @@ if($deptos_res) {
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" style="padding: 25px;">
-                    <form id="formEditarTicketBase">
+                    <form id="formEditarTicketBase" onsubmit="event.preventDefault(); guardarCambiosTicketBase();">
                         <input type="hidden" name="id" value="${ticket.id}">
-                        <input type="hidden" name="accion" value="editar_ticket_base">
+                        <input type="hidden" name="accion" value="editar_basico">
                         
                         <div class="mb-3">
                             <label class="form-label small fw-bold text-secondary text-uppercase">Archivo Adjunto Cargado</label>
@@ -477,13 +477,13 @@ if($deptos_res) {
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label small fw-bold text-secondary">TÍTULO / ASUNTO</label>
-                            <input type="text" class="form-control form-control-neo" value="${ticket.asunto}" readonly style="opacity: 0.7; background: #0b0f1a !important;">
+                            <label class="form-label small fw-bold text-secondary">TÍTULO / ASUNTO <span class="text-danger">*</span></label>
+                            <input type="text" name="asunto" class="form-control form-control-neo" value="${ticket.asunto}" required placeholder="Escriba el asunto...">
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label small fw-bold text-secondary">DESCRIPCIÓN</label>
-                            <textarea class="form-control form-control-neo" rows="3" readonly style="opacity: 0.7; background: #0b0f1a !important; font-size:0.9rem;">${ticket.descripcion}</textarea>
+                            <label class="form-label small fw-bold text-secondary">DESCRIPCIÓN <span class="text-danger">*</span></label>
+                            <textarea name="descripcion" class="form-control form-control-neo" rows="3" required placeholder="Escriba el detalle de la incidencia..." style="font-size:0.9rem;">${ticket.descripcion}</textarea>
                         </div>
 
                         <div class="mb-3">
@@ -509,7 +509,7 @@ if($deptos_res) {
                         </div>
 
                         <div class="d-flex gap-2 pt-2">
-                            <button type="button" onclick="guardarCambiosTicketBase()" class="btn btn-info fw-bold w-100" style="border-radius: 12px; background: var(--accent); border: none; color: #0b0f1a; padding: 12px;"> GUARDAR CAMBIOS </button>
+                            <button type="submit" class="btn btn-info fw-bold w-100" style="border-radius: 12px; background: var(--accent); border: none; color: #0b0f1a; padding: 12px;"> GUARDAR CAMBIOS </button>
                             <button type="button" class="btn btn-secondary w-100" data-bs-dismiss="modal" style="border-radius: 12px; background: transparent; border: 1px solid #475569; color: #94a3b8; padding: 12px;"> CANCELAR </button>
                         </div>
                     </form>
@@ -529,7 +529,13 @@ if($deptos_res) {
         }
 
         function guardarCambiosTicketBase() {
-            const fd = new FormData(document.getElementById('formEditarTicketBase'));
+            const formulario = document.getElementById('formEditarTicketBase');
+            
+            if (!formulario.reportValidity()) {
+                return;
+            }
+
+            const fd = new FormData(formulario);
             fetch('tickets_procesar.php', { method: 'POST', body: fd })
             .then(r => r.json()).then(d => { 
                 if(d.status === 'success') {
@@ -537,6 +543,9 @@ if($deptos_res) {
                 } else {
                     Swal.fire({ icon: 'error', title: 'Error', text: d.message, background: '#161c2d', color: '#fff' });
                 }
+            }).catch(e => {
+                console.error("Error en la solicitud:", e);
+                Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo procesar la solicitud en el servidor.', background: '#161c2d', color: '#fff' });
             });
         }
 
@@ -591,19 +600,14 @@ if($deptos_res) {
             });
         }
 
-        // --- SOLICITUD DE REPORTE CON LOS FILTROS SELECCIONADOS ACTUALES ---
         function solicitarReporte() {
             Swal.fire({
                 title: 'EXPORTAR REPORTE',
                 text: '¿En qué formato deseas descargar el listado con tus filtros actuales?',
                 icon: 'question',
-                background: '#161c2d',
-                color: '#fff',
-                showCancelButton: true,
-                showDenyButton: true,
-                confirmButtonColor: '#10b981',
-                denyButtonColor: '#38bdf8',
-                cancelButtonColor: '#475569',
+                background: '#161c2d', color: '#fff',
+                showCancelButton: true, showDenyButton: true,
+                confirmButtonColor: '#10b981', denyButtonColor: '#38bdf8', cancelButtonColor: '#475569',
                 confirmButtonText: '<i class="bi bi-file-earmark-excel"></i> Excel',
                 denyButtonText: '<i class="bi bi-file-earmark-pdf"></i> PDF',
                 cancelButtonText: 'Cancelar'
@@ -613,13 +617,11 @@ if($deptos_res) {
                 else if (result.isDenied) formato = 'pdf';
                 else return;
 
-                // Capturar el estado de los inputs actuales del formulario para pasárselos al reporteador
                 const formElement = document.getElementById('formFiltros');
                 const formData = new FormData(formElement);
                 const params = new URLSearchParams(formData);
                 params.append('formato', formato);
 
-                // Redirigir al archivo generador con toda la query armada de filtros de pantalla
                 window.location.href = `tickets_reporte.php?${params.toString()}`;
             });
         }
