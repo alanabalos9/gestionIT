@@ -13,10 +13,12 @@ $rol = $_SESSION['rol'];
 
 // --- CAPTURA DE FILTROS Y BÚSQUEDA ---
 $filtro_estado = $_GET['estado'] ?? '';
-$filtro_depto = $_GET['departamento'] ?? ''; // Mantiene el nombre del parámetro GET para no romper el formulario antiguo
+$filtro_depto = $_GET['departamento'] ?? ''; 
 $filtro_tipo = $_GET['tipo'] ?? '';
 $filtro_prioridad = $_GET['prioridad'] ?? '';
 $filtro_tecnico = $_GET['tecnico_id'] ?? '';
+$filtro_fecha_desde = $_GET['fecha_desde'] ?? '';
+$filtro_fecha_hasta = $_GET['fecha_hasta'] ?? '';
 $buscar = $_GET['buscar'] ?? '';
 
 // --- 1. LÓGICA DE CONTADORES ---
@@ -26,11 +28,19 @@ $query_stats = "SELECT
     SUM(CASE WHEN estado = 'En Proceso' THEN 1 ELSE 0 END) as proceso,
     SUM(CASE WHEN estado = 'Mantenimiento' THEN 1 ELSE 0 END) as mantenimiento,
     SUM(CASE WHEN estado = 'Resuelto' THEN 1 ELSE 0 END) as resueltos
-    FROM tickets";
+    FROM tickets WHERE 1=1";
 
 if ($rol != 'administrador' && $rol != 'tecnico') {
-    $query_stats .= " WHERE solicitante_id = $usuario_id";
+    $query_stats .= " AND solicitante_id = $usuario_id";
 }
+// Aplicar rango de fechas también a los contadores si se desea que reflejen el período
+if (!empty($filtro_fecha_desde)) {
+    $query_stats .= " AND DATE(fecha_creacion) >= '" . $conexion->real_escape_string($filtro_fecha_desde) . "'";
+}
+if (!empty($filtro_fecha_hasta)) {
+    $query_stats .= " AND DATE(fecha_creacion) <= '" . $conexion->real_escape_string($filtro_fecha_hasta) . "'";
+}
+
 $stats_res = $conexion->query($query_stats);
 $stats = $stats_res->fetch_assoc();
 
@@ -69,6 +79,12 @@ if (!empty($filtro_prioridad)) {
 }
 if (!empty($filtro_tecnico)) {
     $sql .= " AND t.tecnico_id = '" . $conexion->real_escape_string($filtro_tecnico) . "'";
+}
+if (!empty($filtro_fecha_desde)) {
+    $sql .= " AND DATE(t.fecha_creacion) >= '" . $conexion->real_escape_string($filtro_fecha_desde) . "'";
+}
+if (!empty($filtro_fecha_hasta)) {
+    $sql .= " AND DATE(t.fecha_creacion) <= '" . $conexion->real_escape_string($filtro_fecha_hasta) . "'";
 }
 if (!empty($buscar)) {
     $b = $conexion->real_escape_string($buscar);
@@ -154,6 +170,8 @@ if($deptos_res) {
         .btn-action-card:hover { background: var(--accent-soft); border-color: var(--accent); }
         .btn-action-card i { font-size: 1.1rem; margin-bottom: 3px; }
         .btn-action-card span { font-size: 8px; text-transform: uppercase; color: var(--text-gray); font-weight: 700; }
+        
+        .label-date-neo { font-size: 0.75rem; color: var(--text-gray); font-weight: 600; margin-bottom: 4px; display: block; padding-left: 4px; }
     </style>
 </head>
 <body>
@@ -183,9 +201,9 @@ if($deptos_res) {
 
         <div class="p-4 mb-4 rounded-4" style="background: var(--card-bg); border: 1px solid rgba(255,255,255,0.05);">
             <form method="GET" action="tickets_lista.php" id="formFiltros" class="row g-3 align-items-end">
-                <input type="hidden" name="estado" value="<?php echo htmlspecialchars($filtro_estado); ?>">
                 
                 <div class="col-md-3">
+                    <span class="label-date-neo">Término de búsqueda</span>
                     <div class="search-wrapper-neo">
                         <i class="bi bi-search"></i>
                         <input type="text" name="buscar" class="form-control form-control-neo" placeholder="Buscar ID, asunto..." value="<?php echo htmlspecialchars($buscar); ?>">
@@ -193,6 +211,21 @@ if($deptos_res) {
                 </div>
 
                 <div class="col-md-2">
+                    <span class="label-date-neo">Filtrar Estado</span>
+                    <select name="estado" class="form-select form-select-neo">
+                        <option value="">[Todos los Estados]</option>
+                        <option value="Nuevo" <?php echo $filtro_estado === 'Nuevo' ? 'selected' : ''; ?>>Nuevo</option>
+                        <option value="Abierto" <?php echo $filtro_estado === 'Abierto' ? 'selected' : ''; ?>>Abierto</option>
+                        <option value="En Proceso" <?php echo $filtro_estado === 'En Proceso' ? 'selected' : ''; ?>>En Proceso</option>
+                        <option value="Pendiente" <?php echo $filtro_estado === 'Pendiente' ? 'selected' : ''; ?>>Pendiente</option>
+                        <option value="Mantenimiento" <?php echo $filtro_estado === 'Mantenimiento' ? 'selected' : ''; ?>>Mantenimiento</option>
+                        <option value="Resuelto" <?php echo $filtro_estado === 'Resuelto' ? 'selected' : ''; ?>>Resuelto</option>
+                        <option value="Cerrado" <?php echo $filtro_estado === 'Cerrado' ? 'selected' : ''; ?>>Cerrado</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <span class="label-date-neo">Área / Departamento</span>
                     <select name="departamento" class="form-select form-select-neo">
                         <option value="">[Área / Depto]</option>
                         <?php foreach($departamentos as $d): ?>
@@ -202,6 +235,7 @@ if($deptos_res) {
                 </div>
 
                 <div class="col-md-2">
+                    <span class="label-date-neo">Tipo Incidencia</span>
                     <select name="tipo" class="form-select form-select-neo">
                         <option value="">[Incidencia / Tipo]</option>
                         <option value="Incidencia" <?php echo $filtro_tipo === 'Incidencia' ? 'selected' : ''; ?>>Incidencia</option>
@@ -209,7 +243,8 @@ if($deptos_res) {
                     </select>
                 </div>
 
-                <div class="col-md-2">
+                <div class="col-md-3">
+                    <span class="label-date-neo">Prioridad</span>
                     <select name="prioridad" class="form-select form-select-neo">
                         <option value="">[Prioridad]</option>
                         <option value="Baja" <?php echo $filtro_prioridad === 'Baja' ? 'selected' : ''; ?>>Baja</option>
@@ -218,8 +253,19 @@ if($deptos_res) {
                     </select>
                 </div>
 
+                <div class="col-md-3">
+                    <span class="label-date-neo">Fecha Desde</span>
+                    <input type="date" name="fecha_desde" class="form-control form-control-neo py-2" value="<?php echo htmlspecialchars($filtro_fecha_desde); ?>">
+                </div>
+
+                <div class="col-md-3">
+                    <span class="label-date-neo">Fecha Hasta</span>
+                    <input type="date" name="fecha_hasta" class="form-control form-control-neo py-2" value="<?php echo htmlspecialchars($filtro_fecha_hasta); ?>">
+                </div>
+
                 <?php if ($rol == 'administrador' || $rol == 'tecnico'): ?>
-                <div class="col-md-2">
+                <div class="col-md-3">
+                    <span class="label-date-neo">Técnico Asignado</span>
                     <select name="tecnico_id" class="form-select form-select-neo">
                         <option value="">[Técnico Asignado]</option>
                         <?php foreach($tecnicos as $t): ?>
@@ -346,7 +392,7 @@ if($deptos_res) {
                 const estado = card.getAttribute('data-estado');
                 const display = card.querySelector('.timer-display');
 
-                if (estado === 'Resuelto' || estado === 'No Resuelto') {
+                if (estado === 'Resuelto' || estado === 'No Resuelto' || estado === 'Cerrado') {
                     display.innerHTML = "FINALIZADO";
                     display.style.color = "#10b981";
                     card.classList.remove('card-expired', 'card-warning');
@@ -518,7 +564,7 @@ if($deptos_res) {
             const { value: f } = await Swal.fire({
                 title: 'RESOLVER TICKET',
                 background: '#161c2d', color: '#fff',
-                html: '<select id="s-est" class="swal2-select w-100 mb-3"><option value="Resuelto">Resuelto</option><option value="No Resuelto">No Resuelto</option></select><textarea id="s-det" class="swal2-textarea w-100" style="background:#0b0f1a; color:white;" placeholder="Detalles de la solución..."></textarea>',
+                html: '<select id="s-est" class="swal2-select w-100 mb-3"><option value="Resuelto">Resuelto</option><option value="No Resuelto">No Resuelto</option><option value="Cerrado">Cerrado</option></select><textarea id="s-det" class="swal2-textarea w-100" style="background:#0b0f1a; color:white;" placeholder="Detalles de la solución..."></textarea>',
                 preConfirm: () => ({ estado: document.getElementById('s-est').value, detalle: document.getElementById('s-det').value })
             });
             if (f) enviarAccion({ ...f, id, accion: 'resolver' });
