@@ -21,13 +21,13 @@ $filtro_fecha_desde = $_GET['fecha_desde'] ?? '';
 $filtro_fecha_hasta = $_GET['fecha_hasta'] ?? '';
 $buscar = $_GET['buscar'] ?? '';
 
-// --- 1. LÓGICA DE CONTADORES ---
+// --- 1. LÓGICA DE CONTADORES CORREGIDA PARA NUEVOS ESTADOS ---
 $query_stats = "SELECT 
     COUNT(*) as total,
-    SUM(CASE WHEN estado = 'Abierto' OR estado = 'Mantenimiento' THEN 1 ELSE 0 END) as abiertos,
-    SUM(CASE WHEN estado = 'En Proceso' THEN 1 ELSE 0 END) as proceso,
-    SUM(CASE WHEN estado = 'Mantenimiento' THEN 1 ELSE 0 END) as mantenimiento,
-    SUM(CASE WHEN estado = 'Resuelto' THEN 1 ELSE 0 END) as resueltos
+    SUM(CASE WHEN estado = 'Nuevo' THEN 1 ELSE 0 END) as nuevos,
+    SUM(CASE WHEN estado = 'En curso' THEN 1 ELSE 0 END) as en_curso,
+    SUM(CASE WHEN estado = 'Resuelto' THEN 1 ELSE 0 END) as resueltos,
+    SUM(CASE WHEN estado = 'Cerrado' THEN 1 ELSE 0 END) as cerrados
     FROM tickets WHERE 1=1";
 
 if ($rol != 'administrador' && $rol != 'tecnico') {
@@ -102,7 +102,6 @@ if($deptos_res) {
     while ($d = $deptos_res->fetch_assoc()) { $departamentos[] = $d['area']; }
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -122,7 +121,7 @@ if($deptos_res) {
             --text-gray: #94a3b8;
             --warning-alert: #fbbf24;
             --danger-alert: #ef4444;
-            --mante-color: #8b5cf6;
+            --success-alert: #10b981;
         }
         body { background-color: var(--bg-dark); color: #f8fafc; font-family: 'Inter', sans-serif; }
         .neo-navbar { background: rgba(22, 28, 45, 0.8); backdrop-filter: blur(10px); padding: 0.75rem 2rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); margin-bottom: 2rem; }
@@ -137,10 +136,15 @@ if($deptos_res) {
         
         .card-ticket { background: var(--card-bg); border-radius: 20px; border: 1px solid rgba(255,255,255,0.05); padding: 1.5rem; height: 100%; transition: all 0.3s ease; position: relative; border-left: 5px solid transparent; }
         .card-normal { border-left-color: var(--accent); }
-        .card-warning { border-left-color: var(--warning-alert); background: rgba(251, 191, 36, 0.03); }
+        .card-nuevo { border-left-color: #38bdf8; background: rgba(56, 189, 248, 0.02); }
+        .card-en-curso { border-left-color: #fbbf24; background: rgba(251, 191, 36, 0.02); }
         .card-expired { border-left-color: var(--danger-alert); background: rgba(239, 68, 68, 0.05); animation: pulse-red 2s infinite; }
-        .card-mantenimiento { border-left-color: var(--mante-color); background: rgba(139, 92, 246, 0.05); }
         
+        /* Badges de prioridad estilizados por color */
+        .badge-prioridad-baja { background-color: rgba(16, 185, 129, 0.15) !important; color: #10b981 !important; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-prioridad-media { background-color: rgba(245, 158, 11, 0.15) !important; color: #f59e0b !important; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .badge-prioridad-alta { background-color: rgba(239, 68, 68, 0.15) !important; color: #ef4444 !important; border: 1px solid rgba(239, 68, 68, 0.4); box-shadow: 0 0 8px rgba(239, 68, 68, 0.2); }
+
         .form-control-neo { background: rgba(15, 23, 42, 0.8) !important; border: 1px solid var(--glass-border) !important; color: #ffffff !important; border-radius: 12px; padding: 12px; }
         .form-control-neo:focus { box-shadow: 0 0 0 2px var(--accent-soft); border-color: var(--accent) !important; }
         
@@ -151,16 +155,20 @@ if($deptos_res) {
         .search-wrapper-neo { position: relative; }
         .search-wrapper-neo i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-gray); }
         .search-wrapper-neo input { padding-left: 38px !important; }
-        .swal2-select { background-color: #0f172a !important; color: white !important; border: 1px solid rgba(255,255,255,0.2) !important; }
-        .swal2-select option { background-color: #0f172a !important; color: white !important; }
-
+        
+        /* Modernización Custom SweetAlert2 Dark Futuristic */
+        .neo-swal-popup { background: rgba(22, 28, 45, 0.95) !important; backdrop-filter: blur(15px); border: 1px solid rgba(56, 189, 248, 0.2) !important; border-radius: 20px !important; box-shadow: 0 20px 50px rgba(0,0,0,0.5) !important; color: #f8fafc !important; }
+        .neo-swal-title { font-family: 'Orbitron', sans-serif !important; font-weight: bold !important; letter-spacing: 1px; color: #fff !important; font-size: 1.3rem !important; }
+        .neo-swal-input, .neo-swal-textarea, .neo-swal-select { background-color: #0b0f1a !important; color: white !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 12px !important; padding: 10px !important; font-family: 'Inter', sans-serif; }
+        .neo-swal-input:focus, .neo-swal-textarea:focus, .neo-swal-select:focus { border-color: var(--accent) !important; box-shadow: 0 0 8px var(--accent-soft) !important; }
+        
         @keyframes pulse-red {
             0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2); }
             70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
             100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
         }
         .timer-display { font-family: 'Orbitron'; font-size: 0.95rem; font-weight: bold; }
-        .btn-action-group { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 15px; }
+        .btn-action-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 15px; }
         .btn-action-card { background: #0f172a; border: 1px solid rgba(255,255,255,0.05); color: white; padding: 8px 2px; border-radius: 10px; display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: 0.2s; }
         .btn-action-card:hover { background: var(--accent-soft); border-color: var(--accent); }
         .btn-action-card i { font-size: 1.1rem; margin-bottom: 3px; }
@@ -209,10 +217,7 @@ if($deptos_res) {
                     <select name="estado" class="form-select form-select-neo">
                         <option value="">[Todos los Estados]</option>
                         <option value="Nuevo" <?php echo $filtro_estado === 'Nuevo' ? 'selected' : ''; ?>>Nuevo</option>
-                        <option value="Abierto" <?php echo $filtro_estado === 'Abierto' ? 'selected' : ''; ?>>Abierto</option>
-                        <option value="En Proceso" <?php echo $filtro_estado === 'En Proceso' ? 'selected' : ''; ?>>En Proceso</option>
-                        <option value="Pendiente" <?php echo $filtro_estado === 'Pendiente' ? 'selected' : ''; ?>>Pendiente</option>
-                        <option value="Mantenimiento" <?php echo $filtro_estado === 'Mantenimiento' ? 'selected' : ''; ?>>Mantenimiento</option>
+                        <option value="En curso" <?php echo $filtro_estado === 'En curso' ? 'selected' : ''; ?>>En curso</option>
                         <option value="Resuelto" <?php echo $filtro_estado === 'Resuelto' ? 'selected' : ''; ?>>Resuelto</option>
                         <option value="Cerrado" <?php echo $filtro_estado === 'Cerrado' ? 'selected' : ''; ?>>Cerrado</option>
                     </select>
@@ -280,10 +285,10 @@ if($deptos_res) {
 
         <div class="row g-3 mb-5">
             <div class="col-md"><a href="tickets_lista.php" class="card-stat"><h6><?php echo $stats['total']; ?></h6><small>TOTAL</small></a></div>
-            <div class="col-md"><a href="tickets_lista.php?estado=Abierto" class="card-stat"><h6 class="text-warning"><?php echo $stats['abiertos']; ?></h6><small>ABIERTOS</small></a></div>
-            <div class="col-md"><a href="tickets_lista.php?estado=En Proceso" class="card-stat"><h6 class="text-info"><?php echo $stats['proceso']; ?></h6><small>PROCESO</small></a></div>
-            <div class="col-md"><a href="tickets_lista.php?estado=Mantenimiento" class="card-stat"><h6 style="color: var(--mante-color);"><?php echo $stats['mantenimiento']; ?></h6><small>MANTE.</small></a></div>
-            <div class="col-md"><a href="tickets_lista.php?estado=Resuelto" class="card-stat"><h6 class="text-success"><?php echo $stats['resueltos']; ?></h6><small>RESUELTOS</small></a></div>
+            <div class="col-md"><a href="tickets_lista.php?estado=Nuevo" class="card-stat"><h6 class="text-info"><?php echo $stats['nuevos'] ?? 0; ?></h6><small>NUEVOS</small></a></div>
+            <div class="col-md"><a href="tickets_lista.php?estado=En curso" class="card-stat"><h6 class="text-warning"><?php echo $stats['en_curso'] ?? 0; ?></h6><small>EN CURSO</small></a></div>
+            <div class="col-md"><a href="tickets_lista.php?estado=Resuelto" class="card-stat"><h6 class="text-success"><?php echo $stats['resueltos'] ?? 0; ?></h6><small>RESUELTOS</small></a></div>
+            <div class="col-md"><a href="tickets_lista.php?estado=Cerrado" class="card-stat"><h6 class="text-muted"><?php echo $stats['cerrados'] ?? 0; ?></h6><small>CERRADOS</small></a></div>
         </div>
 
         <div class="row g-4">
@@ -295,11 +300,10 @@ if($deptos_res) {
             <?php endif; ?>
 
             <?php while($row = $res->fetch_assoc()): 
-                $isMantenimiento = ($row['estado'] === 'Mantenimiento');
-                $displayTitle = $isMantenimiento ? ($row['detalle_resolucion'] ?: 'Mantenimiento Programado') : $row['asunto'];
-                $displayDeadline = $isMantenimiento ? $row['fecha_mantenimiento'] : $row['fecha_limite'];
+                $displayTitle = $row['asunto'];
+                $displayDeadline = $row['fecha_limite'];
 
-                if(empty($displayDeadline) && !$isMantenimiento){
+                if(empty($displayDeadline)){
                     $displayDeadline = date('Y-m-d H:i:s', strtotime($row['fecha_creacion'] . ' + 48 hours'));
                 }
 
@@ -314,23 +318,34 @@ if($deptos_res) {
                     'archivo_tipo' => $row['archivo_tipo'] ?? ''
                 ];
                 $ticketJsonSeguro = htmlspecialchars(json_encode($ticketArray, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+                
+                // Mapeo dinámico de estilos de tarjeta segun el estado
+                $cardEstadoClass = 'card-normal';
+                if($row['estado'] === 'Nuevo') $cardEstadoClass = 'card-nuevo';
+                if($row['estado'] === 'En curso') $cardEstadoClass = 'card-en-curso';
+
+                // Mapeo dinámico de estilos de badge por prioridad
+                $badgePrioridadClass = 'badge-prioridad-baja';
+                if(strtolower($row['prioridad']) === 'media') $badgePrioridadClass = 'badge-prioridad-media';
+                if(strtolower($row['prioridad']) === 'alta') $badgePrioridadClass = 'badge-prioridad-alta';
             ?>
             <div class="col-md-4">
-                <div class="card-ticket <?php echo $isMantenimiento ? 'card-mantenimiento' : ''; ?>" 
+                <div class="card-ticket <?php echo $cardEstadoClass; ?>" 
                      id="card-<?php echo $row['id']; ?>" 
                      data-deadline="<?php echo $displayDeadline; ?>" 
                      data-estado="<?php echo $row['estado']; ?>">
                     
                     <div class="d-flex justify-content-between mb-3">
-                        <span class="badge <?php echo $isMantenimiento ? 'bg-primary' : 'bg-secondary'; ?> text-uppercase px-2 py-1">
-                            <?php echo $isMantenimiento ? 'Mantenimiento' : $row['prioridad']; ?>
+                        <span class="badge <?php echo $badgePrioridadClass; ?> text-uppercase px-2 py-1">
+                            <?php echo $row['prioridad']; ?>
                         </span>
                         <div id="timer-<?php echo $row['id']; ?>" class="timer-display">Cargando...</div>
                     </div>
                     
                     <h5 class="fw-bold text-white mb-2 text-truncate"><?php echo htmlspecialchars($displayTitle); ?></h5>
-                    <p class="text-secondary small mb-1">Estado: <span class="text-info fw-bold"><?php echo $row['estado']; ?></span></p>
-                    <p class="text-secondary small mb-1">Técnico: <span class="text-white"><?php echo $row['tecnico_nombre'] ?? 'Pendiente'; ?></span></p>
+                    <p class="text-secondary small mb-1">Tipo: <span class="text-white fw-semibold"><?php echo htmlspecialchars($row['tipo']); ?></span></p>
+                    <p class="text-secondary small mb-1">Estado: <span class="text-info fw-bold"><?php echo htmlspecialchars($row['estado']); ?></span></p>
+                    <p class="text-secondary small mb-1">Técnico: <span class="text-white"><?php echo htmlspecialchars($row['tecnico_nombre'] ?? 'Pendiente'); ?></span></p>
                     <p class="text-secondary small mb-3" style="font-size:0.75rem;">Área: <span class="text-info"><?php echo htmlspecialchars($row['solicitante_depto'] ?? 'General'); ?></span></p>
                     
                     <div class="d-flex justify-content-between align-items-center mb-1">
@@ -342,8 +357,7 @@ if($deptos_res) {
                     <div class="btn-action-group">
                         <div onclick="asignarTicket(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-person-plus text-info"></i><span>Asignar</span></div>
                         <div onclick="extenderTiempo(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-clock-history text-primary"></i><span>+Tiempo</span></div>
-                        <div onclick="resolverTicket(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-check2-circle text-success"></i><span>Resolver</span></div>
-                        <div onclick="mantenimientoTicket(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-tools text-warning"></i><span>Mante.</span></div>
+                        <div onclick="resolverTicket(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-check2-circle text-success"></i><span>Estado</span></div>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -354,7 +368,7 @@ if($deptos_res) {
 
     <div class="modal fade" id="modalDetalle" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content" style="background: var(--card-bg); border-radius: 20px; border: 1px solid rgba(255,255,255,0.1);">
+            <div class="modal-content" style="background: rgba(22, 28, 45, 0.95); backdrop-filter: blur(15px); border-radius: 20px; border: 1px solid rgba(56, 189, 248, 0.25); box-shadow: 0 0 25px rgba(56, 189, 248, 0.15);">
                 <div id="modalContent"></div>
             </div>
         </div>
@@ -372,10 +386,10 @@ if($deptos_res) {
                 const estado = card.getAttribute('data-estado');
                 const display = card.querySelector('.timer-display');
 
-                if (estado === 'Resuelto' || estado === 'No Resuelto' || estado === 'Cerrado') {
+                if (estado === 'Resuelto' || estado === 'Cerrado') {
                     display.innerHTML = "FINALIZADO";
                     display.style.color = "#10b981";
-                    card.classList.remove('card-expired', 'card-warning');
+                    card.classList.remove('card-expired', 'card-warning', 'card-nuevo', 'card-en-curso');
                     card.classList.add('card-normal');
                     return;
                 }
@@ -389,25 +403,24 @@ if($deptos_res) {
                 const diff = countDate - now;
 
                 if (diff <= 0) {
-                    display.innerHTML = (estado === 'Mantenimiento') ? "EN CURSO" : "EXPIRADO";
-                    display.style.color = (estado === 'Mantenimiento') ? '#8b5cf6' : '#ef4444';
-                    if(estado !== 'Mantenimiento') card.className = 'card-ticket card-expired';
+                    display.innerHTML = "EXPIRADO";
+                    display.style.color = '#ef4444';
+                    card.className = 'card-ticket card-expired';
                 } else {
                     const hours = Math.floor(diff / (1000 * 60 * 60));
                     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
                     const seconds = Math.floor((diff % (1000 * 60)) / 1000);
                     display.innerHTML = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
-                    if (estado === 'Mantenimiento') {
-                        display.style.color = '#8b5cf6';
+                    if (estado === 'Nuevo') {
+                        card.className = 'card-ticket card-nuevo';
+                        display.style.color = '#38bdf8';
+                    } else if (estado === 'En curso') {
+                        card.className = 'card-ticket card-en-curso';
+                        display.style.color = '#fbbf24';
                     } else {
-                        if (hours < 3) {
-                            card.className = 'card-ticket card-warning';
-                            display.style.color = '#fbbf24';
-                        } else {
-                            card.className = 'card-ticket card-normal';
-                            display.style.color = '#38bdf8';
-                        }
+                        card.className = 'card-ticket card-normal';
+                        display.style.color = '#38bdf8';
                     }
                 }
             });
@@ -461,7 +474,7 @@ if($deptos_res) {
 
             const htmlModal = `
                 <div class="modal-header border-bottom-0 pb-0" style="padding: 25px 25px 0 25px;">
-                    <h5 class="modal-title fw-bold text-white" style="font-family: 'Orbitron'; font-size: 1.1rem;">EDITAR TICKET #${ticket.id}</h5>
+                    <h5 class="modal-title fw-bold text-white" style="font-family: 'Orbitron'; font-size: 1.1rem; letter-spacing:1px;">GESTIONAR TICKET #${ticket.id}</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" style="padding: 25px;">
@@ -487,8 +500,8 @@ if($deptos_res) {
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label small fw-bold text-secondary">TIPO DE SOLICITUD</label>
-                            <select name="tipo" class="form-select form-control-neo" required style="background-color: #0f172a !important; color: white !important;">
+                            <label class="form-label small fw-bold text-secondary">TIPO DE SOLICITUD / INCIDENCIA</label>
+                            <select name="tipo" class="form-select form-control-neo form-select-neo" required>
                                 <option value="Incidencia" ${ticket.tipo === 'Incidencia' ? 'selected' : ''}>Incidencia (Algo falló)</option>
                                 <option value="Solicitud" ${ticket.tipo === 'Solicitud' ? 'selected' : ''}>Solicitud (Nuevo requerimiento)</option>
                             </select>
@@ -500,10 +513,10 @@ if($deptos_res) {
                                 <span class="input-group-text input-group-text-neo" id="modal-termometro-icon" style="background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.08);">
                                     <i class="bi bi-thermometer-half"></i>
                                 </span>
-                                <select name="prioridad" id="modalPrioridadSelect" class="form-select form-control-neo" required onchange="actualizarColorPrioridadModal()" style="background-color: #0f172a !important; color: white !important;">
+                                <select name="prioridad" id="modalPrioridadSelect" class="form-select form-control-neo form-select-neo w-75" required onchange="actualizarColorPrioridadModal()">
                                     <option value="Baja" ${ticket.prioridad === 'Baja' ? 'selected' : ''}>Baja</option>
                                     <option value="Media" ${ticket.prioridad === 'Media' ? 'selected' : ''}>Media</option>
-                                    <option value="Alta" ${ticket.prioridad === 'Alta' ? 'selected' : ''}>Alta (Crítica)</option>
+                                    <option value="Alta" ${ticket.prioridad === 'Alta' ? 'selected' : ''}>Alta</option>
                                 </select>
                             </div>
                         </div>
@@ -530,22 +543,27 @@ if($deptos_res) {
 
         function guardarCambiosTicketBase() {
             const formulario = document.getElementById('formEditarTicketBase');
-            
-            if (!formulario.reportValidity()) {
-                return;
-            }
+            if (!formulario.reportValidity()) return;
 
             const fd = new FormData(formulario);
+
             fetch('tickets_procesar.php', { method: 'POST', body: fd })
             .then(r => r.json()).then(d => { 
                 if(d.status === 'success') {
-                    Swal.fire({ icon: 'success', title: 'Ticket Actualizado', background: '#161c2d', color: '#fff', showConfirmButton: false, timer: 1200 }).then(() => location.reload());
+                    Swal.fire({ 
+                        icon: 'success', 
+                        title: 'TICKET ACTUALIZADO', 
+                        text: 'Los cambios de prioridad, incidencia y texto fueron guardados.',
+                        customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' },
+                        showConfirmButton: false, 
+                        timer: 1500 
+                    }).then(() => location.reload());
                 } else {
-                    Swal.fire({ icon: 'error', title: 'Error', text: d.message, background: '#161c2d', color: '#fff' });
+                    Swal.fire({ icon: 'error', title: 'Error', text: d.message, customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' } });
                 }
             }).catch(e => {
                 console.error("Error en la solicitud:", e);
-                Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo procesar la solicitud en el servidor.', background: '#161c2d', color: '#fff' });
+                Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo procesar en el servidor.', customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' } });
             });
         }
 
@@ -554,7 +572,8 @@ if($deptos_res) {
                 title: 'EXTENDER PLAZO',
                 input: 'select',
                 inputOptions: { '24': '+24 Horas', '48': '+48 Horas', '72': '+72 Horas' },
-                background: '#161c2d', color: '#fff', confirmButtonColor: '#38bdf8', showCancelButton: true
+                customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title', input: 'neo-swal-select' },
+                confirmButtonColor: '#38bdf8', showCancelButton: true, cancelButtonColor: '#475569'
             });
             if (horas) enviarAccion({ id, horas, accion: 'extender_tiempo' });
         }
@@ -564,29 +583,32 @@ if($deptos_res) {
                 title: 'ASIGNAR TÉCNICO',
                 input: 'select',
                 inputOptions: { <?php foreach($tecnicos as $t) echo "'{$t['id']}': '".addslashes($t['nombre_completo'])."',"; ?> },
-                background: '#161c2d', color: '#fff', confirmButtonColor: '#38bdf8', showCancelButton: true
+                customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title', input: 'neo-swal-select' },
+                confirmButtonColor: '#38bdf8', showCancelButton: true, cancelButtonColor: '#475569'
             });
             if (tId) enviarAccion({ id, tecnico_id: tId, accion: 'asignar' });
         }
 
         async function resolverTicket(id) {
             const { value: f } = await Swal.fire({
-                title: 'RESOLVER TICKET',
-                background: '#161c2d', color: '#fff',
-                html: '<select id="s-est" class="swal2-select w-100 mb-3"><option value="Resuelto">Resuelto</option><option value="No Resuelto">No Resuelto</option><option value="Cerrado">Cerrado</option></select><textarea id="s-det" class="swal2-textarea w-100" style="background:#0b0f1a; color:white;" placeholder="Detalles de la solución..."></textarea>',
+                title: 'CAMBIAR ESTADO DEL TICKET',
+                customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' },
+                html: `
+                    <label class="small text-secondary d-block text-start mb-1 fw-bold">Seleccionar Estado</label>
+                    <select id="s-est" class="neo-swal-select w-100 mb-3">
+                        <option value="En curso">En curso</option>
+                        <option value="Resuelto">Resuelto</option>
+                        <option value="Cerrado">Cerrado</option>
+                    </select>
+                    <label class="small text-secondary d-block text-start mb-1 fw-bold">Comentarios / Detalles de la resolución</label>
+                    <textarea id="s-det" class="neo-swal-textarea w-100" style="height:100px;" placeholder="Escriba los detalles aquí..."></textarea>
+                `,
+                showCancelButton: true,
+                confirmButtonColor: '#10b981',
+                cancelButtonColor: '#475569',
                 preConfirm: () => ({ estado: document.getElementById('s-est').value, detalle: document.getElementById('s-det').value })
             });
             if (f) enviarAccion({ ...f, id, accion: 'resolver' });
-        }
-
-        async function mantenimientoTicket(id) {
-            const { value: f } = await Swal.fire({
-                title: 'PROGRAMAR MANTENIMIENTO',
-                background: '#161c2d', color: '#fff',
-                html: '<label class="small text-secondary d-block mb-1">Fecha y Hora</label><input type="datetime-local" id="s-fec" class="swal2-input w-100 mb-3" value="<?php echo date('Y-m-d\TH:i'); ?>"><textarea id="s-det-m" class="swal2-textarea w-100" style="background:#0b0f1a; color:white;" placeholder="Ej: Cambio de Disco Duro / Limpieza..."></textarea>',
-                preConfirm: () => ({ fecha: document.getElementById('s-fec').value, detalle: document.getElementById('s-det-m').value })
-            });
-            if (f) enviarAccion({ ...f, id, accion: 'mantenimiento' });
         }
 
         function enviarAccion(datos) {
@@ -595,8 +617,16 @@ if($deptos_res) {
             fetch('tickets_procesar.php', { method: 'POST', body: fd })
             .then(r => r.json()).then(d => { 
                 if(d.status === 'success') {
-                    Swal.fire({ icon: 'success', title: 'Ticket Actualizado', background: '#161c2d', color: '#fff', showConfirmButton: false, timer: 1200 }).then(() => location.reload());
-                } 
+                    Swal.fire({ 
+                        icon: 'success', 
+                        title: 'ESTADO ACTUALIZADO', 
+                        customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' },
+                        showConfirmButton: false, 
+                        timer: 1200 
+                    }).then(() => location.reload());
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Error', text: d.message, customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' } });
+                }
             });
         }
 
@@ -605,7 +635,7 @@ if($deptos_res) {
                 title: 'EXPORTAR REPORTE',
                 text: '¿En qué formato deseas descargar el listado con tus filtros actuales?',
                 icon: 'question',
-                background: '#161c2d', color: '#fff',
+                customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' },
                 showCancelButton: true, showDenyButton: true,
                 confirmButtonColor: '#10b981', denyButtonColor: '#38bdf8', cancelButtonColor: '#475569',
                 confirmButtonText: '<i class="bi bi-file-earmark-excel"></i> Excel',
