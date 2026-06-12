@@ -14,6 +14,11 @@ $error = "";
 $success = "";
 $mostrar_modal_registro = false; // Bandera de control para levantar el formulario de registro
 
+// Banderas para persistencia de modales de administración si hay errores/éxitos específicos
+$mostrar_modal_baja = false;
+$mostrar_modal_editar = false;
+$usuario_a_editar = null;
+
 /**
  * Función auxiliar para configurar y enviar correos
  */
@@ -80,7 +85,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_verificar_admin'])
     if ($row = $resultado->fetch_assoc()) {
         if (password_verify($admin_pass, $row['password']) || $admin_pass == $row['password']) {
             $rol_limpio = strtolower(trim($row['rol']));
-            // Corrección aquí: Validación limpia sin la función indefinida
             if ($rol_limpio == 'admin' || $rol_limpio == 'administrador') {
                 $mostrar_modal_registro = true; 
             } else {
@@ -112,10 +116,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'
 
     if ($res_check->num_rows > 0) {
         $error = "Error de protocolo: El identificador, correo o DNI ya se encuentra asignado a otra cuenta.";
+        $mostrar_modal_registro = true;
     } else {
         $pass_hash = password_hash($pass1, PASSWORD_BCRYPT);
 
-        // Inserción completa con todos tus campos mapeados
         $stmt_ins = $conexion->prepare("INSERT INTO usuarios (nombre_completo, usuario, email, dni, password, rol, area) VALUES (?, ?, ?, ?, ?, ?, ?)");
         $stmt_ins->bind_param("sssssss", $nombre_completo, $nuevo_user, $email, $dni, $pass_hash, $rol, $area);
 
@@ -123,6 +127,79 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'
             $success = "Ficha de usuario e identidad sincronizadas con éxito en el sistema.";
         } else {
             $error = "Error de sistema: No se pudo escribir en el registro de credenciales.";
+            $mostrar_modal_registro = true;
+        }
+    }
+}
+
+// LÓGICA DE BAJA DE USUARIO (PROCESAMIENTO)
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_baja_usuario'])) {
+    $id_baja = $_POST['id_baja'];
+    
+    $stmt_del = $conexion->prepare("DELETE FROM usuarios WHERE id = ?");
+    $stmt_del->bind_param("i", $id_baja);
+    
+    if ($stmt_del->execute()) {
+        $success = "El usuario ha sido dado de baja del sistema con éxito.";
+    } else {
+        $error = "Error de sistema: No se pudo eliminar el registro de la red.";
+        $mostrar_modal_baja = true;
+    }
+}
+
+// LÓGICA DE BÚSQUEDA PARA EDITAR (PROCESAMIENTO TRADICIONAL Y DESDE AJAX)
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_buscar_editar'])) {
+    $busqueda = trim($_POST['busqueda_editar']);
+    
+    $stmt_edit_search = $conexion->prepare("SELECT * FROM usuarios WHERE id = ? OR usuario = ? OR dni = ? OR email = ?");
+    $stmt_edit_search->bind_param("ssss", $busqueda, $busqueda, $busqueda, $busqueda);
+    $stmt_edit_search->execute();
+    $res_edit = $stmt_edit_search->get_result();
+    
+    if ($row_edit = $res_edit->fetch_assoc()) {
+        $usuario_a_editar = $row_edit;
+        $mostrar_modal_editar = true;
+    } else {
+        $error = "No se encontró ningún usuario con los criterios especificados para su edición.";
+        $mostrar_modal_registro = true; // Volver al panel anterior
+    }
+}
+
+// LÓGICA DE ACTUALIZACIÓN / GUARDAR EDICIÓN
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_actualizar_usuario'])) {
+    $id_edit = $_POST['id_editar'];
+    $nombre_completo = trim($_POST['nombre_completo']);
+    $nuevo_user      = trim($_POST['nuevo_usuario']);
+    $email           = trim($_POST['email']);
+    $dni             = trim($_POST['dni']);
+    $rol             = $_POST['rol'];
+    $area            = trim($_POST['area']);
+    $pass1           = $_POST['nueva_password'];
+
+    // Verificar duplicados excluyendo el usuario actual
+    $stmt_check = $conexion->prepare("SELECT id FROM usuarios WHERE (usuario = ? OR email = ? OR dni = ?) AND id != ?");
+    $stmt_check->bind_param("sssi", $nuevo_user, $email, $dni, $id_edit);
+    $stmt_check->execute();
+    $res_check = $stmt_check->get_result();
+
+    if ($res_check->num_rows > 0) {
+        $error = "Error de conflicto: Los nuevos datos ingresados pertenecen a otra entidad de la red.";
+    } else {
+        if (!empty($pass1)) {
+            // Si el admin ingresó una nueva contraseña, se hashea y se actualiza
+            $pass_hash = password_hash($pass1, PASSWORD_BCRYPT);
+            $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, password=?, rol=?, area=? WHERE id=?");
+            $stmt_upd->bind_param("sssssssi", $nombre_completo, $nuevo_user, $email, $dni, $pass_hash, $rol, $area, $id_edit);
+        } else {
+            // Si vino vacía, se conserva la contraseña existente en la base de datos
+            $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, rol=?, area=? WHERE id=?");
+            $stmt_upd->bind_param("ssssssi", $nombre_completo, $nuevo_user, $email, $dni, $rol, $area, $id_edit);
+        }
+
+        if ($stmt_upd->execute()) {
+            $success = "La ficha de identidad y privilegios del usuario han sido actualizados con éxito.";
+        } else {
+            $error = "Error de sistema: Fallo al reescribir la matriz de datos.";
         }
     }
 }
@@ -144,6 +221,44 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_recuperar'])) {
         $error = "Error de protocolo: Fallo en la conexión con el servidor de seguridad.";
     }
 }
+
+// Mini endpoint para la búsqueda interactiva asíncrona de usuarios a dar de baja
+if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_baja' && isset($_GET['term'])) {
+    ob_clean();
+    header('Content-Type: application/json');
+    $term_limpio = trim($_GET['term']);
+    $term_like = "%" . $term_limpio . "%";
+    
+    $stmt_ajax = $conexion->prepare("SELECT id, nombre_completo, usuario, dni, rol, area FROM usuarios WHERE id = ? OR nombre_completo LIKE ? OR usuario LIKE ? OR dni LIKE ? OR rol LIKE ? OR area LIKE ? LIMIT 5");
+    $stmt_ajax->bind_param("ssssss", $term_limpio, $term_like, $term_like, $term_like, $term_like, $term_like);
+    $stmt_ajax->execute();
+    $res_ajax = $stmt_ajax->get_result();
+    $usuarios_encontrados = [];
+    while ($r = $res_ajax->fetch_assoc()) {
+        $usuarios_encontrados[] = $r;
+    }
+    echo json_encode($usuarios_encontrados);
+    exit();
+}
+
+// NUEVO: Mini endpoint para la búsqueda interactiva asíncrona de usuarios a editar/modificar
+if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($_GET['term'])) {
+    ob_clean();
+    header('Content-Type: application/json');
+    $term_limpio = trim($_GET['term']);
+    $term_like = "%" . $term_limpio . "%";
+    
+    $stmt_ajax = $conexion->prepare("SELECT id, nombre_completo, usuario, dni, rol, area FROM usuarios WHERE id = ? OR nombre_completo LIKE ? OR usuario LIKE ? OR dni LIKE ? OR rol LIKE ? OR area LIKE ? LIMIT 5");
+    $stmt_ajax->bind_param("ssssss", $term_limpio, $term_like, $term_like, $term_like, $term_like, $term_like);
+    $stmt_ajax->execute();
+    $res_ajax = $stmt_ajax->get_result();
+    $usuarios_encontrados = [];
+    while ($r = $res_ajax->fetch_assoc()) {
+        $usuarios_encontrados[] = $r;
+    }
+    echo json_encode($usuarios_encontrados);
+    exit();
+}
 ?>
 
 <!DOCTYPE html>
@@ -163,6 +278,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_recuperar'])) {
             --glass: rgba(15, 23, 42, 0.85);
             --success-glow: rgba(16, 185, 129, 0.2);
             --error-glow: rgba(239, 68, 68, 0.2);
+            --neon-red: #f43f5e;
+            --neon-yellow: #eab308;
         }
 
         body {
@@ -335,6 +452,28 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_recuperar'])) {
             background: var(--neon-blue); padding: 15px 20px; color: var(--deep-space); font-weight: 800;
             display: flex; justify-content: space-between;
         }
+        
+        /* Estilos personalizados para las listas de búsqueda sugerida */
+        .search-results-list {
+            max-height: 180px;
+            overflow-y: auto;
+            background: rgba(2, 6, 23, 0.95);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 12px;
+            padding: 0;
+            list-style: none;
+        }
+        .search-results-list li {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            transition: background 0.2s;
+            font-size: 0.9rem;
+        }
+        .search-results-list li:hover {
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--neon-blue);
+        }
     </style>
 </head>
 <body>
@@ -415,6 +554,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_recuperar'])) {
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content" style="background: #0f172a; border: 1px solid var(--neon-blue); border-radius: 25px; box-shadow: 0 0 40px rgba(56, 189, 248, 0.4);">
                 <div class="modal-body p-5">
+                    
+                    <div class="d-flex justify-content-end gap-2 mb-3">
+                        <button type="button" class="btn btn-sm btn-outline-warning fw-bold px-3" style="border-radius: 10px;" data-bs-toggle="modal" data-bs-target="#modalBuscarEditar" data-bs-dismiss="modal">
+                            <i class="bi bi-pencil-square me-1"></i> Modificar Usuario
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger fw-bold px-3" style="border-radius: 10px;" data-bs-toggle="modal" data-bs-target="#modalBajaUsuario" data-bs-dismiss="modal">
+                            <i class="bi bi-person-x-fill me-1"></i> Dar de Baja
+                        </button>
+                    </div>
+
                     <div class="text-center mb-4">
                         <i class="bi bi-person-gear text-info" style="font-size: 3.5rem;"></i>
                         <h4 class="text-white fw-bold mt-2">ALTA DE NUEVO USUARIO</h4>
@@ -467,6 +616,136 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_recuperar'])) {
         </div>
     </div>
 
+    <div class="modal fade" id="modalBajaUsuario" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background: #0f172a; border: 1px solid var(--neon-red); border-radius: 25px; box-shadow: 0 0 40px rgba(244, 63, 94, 0.4);">
+                <div class="modal-body p-5">
+                    <div class="text-center mb-4">
+                        <i class="bi bi-person-dash-fill text-danger" style="font-size: 3.5rem;"></i>
+                        <h4 class="text-white fw-bold mt-2">BAJA DE USUARIO</h4>
+                        <p class="text-white-50 small">Busque la identidad del nodo que desea desvincular del sistema global.</p>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label small text-white-50 fw-bold">BUSCADOR DE ENTIDADES</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent border-0 text-white-50"><i class="bi bi-search"></i></span>
+                            <input type="text" id="inputBuscarBaja" class="form-control text-center" placeholder="Ingrese ID, nombre, DNI, rol o área...">
+                        </div>
+                        <ul id="listaResultadosBaja" class="search-results-list mt-2 d-none"></ul>
+                    </div>
+
+                    <form action="index.php" method="POST" id="formConfirmarBaja" class="d-none text-center">
+                        <input type="hidden" name="id_baja" id="idBajaTarget">
+                        <div class="alert alert-dark border-danger bg-opacity-25 text-white p-3 mb-4" style="border-radius:14px;">
+                            <p class="small text-white-50 mb-1">Confirmar baja crítica para la entidad:</p>
+                            <h5 id="textTargetBaja" class="text-danger fw-bold mb-0"></h5>
+                        </div>
+                        <div class="d-flex gap-3">
+                            <button type="button" class="btn btn-secondary w-50 py-3 fw-bold" style="border-radius: 14px;" data-bs-toggle="modal" data-bs-target="#modalRegistro" data-bs-dismiss="modal">Volver</button>
+                            <button type="submit" name="btn_baja_usuario" class="btn btn-danger w-50 py-3 fw-bold" style="border-radius: 14px;">Confirmar Baja</button>
+                        </div>
+                    </form>
+                    
+                    <div id="btnVolverBajaDefault" class="text-center">
+                        <button type="button" class="btn btn-outline-secondary btn-sm px-4" style="border-radius: 10px;" data-bs-toggle="modal" data-bs-target="#modalRegistro" data-bs-dismiss="modal">Volver al Panel de Alta</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalBuscarEditar" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background: #0f172a; border: 1px solid var(--neon-yellow); border-radius: 25px; box-shadow: 0 0 40px rgba(234, 179, 8, 0.4);">
+                <div class="modal-body p-5">
+                    <div class="text-center mb-4">
+                        <i class="bi bi-search-heart text-warning" style="font-size: 3.5rem;"></i>
+                        <h4 class="text-white fw-bold mt-2">BUSCADOR PARA MODIFICACIÓN</h4>
+                        <p class="text-white-50 small">Localice el registro ingresando el ID de Acceso, Correo Electrónico o número de DNI exacto.</p>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label small text-white-50 fw-bold">CRITERIO DE BÚSQUEDA</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent border-0 text-white-50"><i class="bi bi-search"></i></span>
+                            <input type="text" id="inputBuscarEditar" class="form-control text-center" placeholder="Ingrese ID, nombre, DNI, rol o área...">
+                        </div>
+                        <ul id="listaResultadosEditar" class="search-results-list mt-2 d-none"></ul>
+                    </div>
+
+                    <form action="index.php" method="POST" id="formConfirmarEditar" class="d-none">
+                        <input type="hidden" name="busqueda_editar" id="idEditarTarget">
+                        <input type="hidden" name="btn_buscar_editar" value="1">
+                    </form>
+
+                    <div class="text-center">
+                        <button type="button" class="btn btn-secondary w-100 py-3 fw-bold" style="border-radius: 14px;" data-bs-toggle="modal" data-bs-target="#modalRegistro" data-bs-dismiss="modal">Volver</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <?php if ($mostrar_modal_editar && $usuario_a_editar): ?>
+    <div class="modal fade" id="modalEditarUsuario" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content" style="background: #0f172a; border: 1px solid var(--neon-yellow); border-radius: 25px; box-shadow: 0 0 40px rgba(234, 179, 8, 0.4);">
+                <div class="modal-body p-5">
+                    <div class="text-center mb-4">
+                        <i class="bi bi-pencil-square text-warning" style="font-size: 3.5rem;"></i>
+                        <h4 class="text-white fw-bold mt-2">EDITAR MATRIZ DE IDENTIDAD</h4>
+                        <p class="text-white-50 small">Modifique los campos correspondientes. Deje la contraseña en blanco si prefiere conservar la actual.</p>
+                    </div>
+                    
+                    <form action="index.php" method="POST">
+                        <input type="hidden" name="id_editar" value="<?php echo $usuario_a_editar['id']; ?>">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label small text-white-50 fw-bold">NOMBRE Y APELLIDO completo</label>
+                                <input type="text" name="nombre_completo" class="form-control" value="<?php echo htmlspecialchars($usuario_a_editar['nombre_completo']); ?>" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label small text-white-50 fw-bold">USUARIO (ID de Acceso)</label>
+                                <input type="text" name="nuevo_usuario" class="form-control" value="<?php echo htmlspecialchars($usuario_a_editar['usuario']); ?>" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label small text-white-50 fw-bold">CORREO ELECTRÓNICO</label>
+                                <input type="email" name="email" class="form-control" value="<?php echo htmlspecialchars($usuario_a_editar['email']); ?>" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label small text-white-50 fw-bold">DOCUMENTO (DNI)</label>
+                                <input type="text" name="dni" class="form-control" value="<?php echo htmlspecialchars($usuario_a_editar['dni']); ?>" required>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <label class="form-label small text-white-50 fw-bold">ÁREA / DEPARTAMENTO</label>
+                                <input type="text" name="area" class="form-control" value="<?php echo htmlspecialchars($usuario_a_editar['area']); ?>" required>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <label class="form-label small text-white-50 fw-bold">ROL DEL SISTEMA</label>
+                                <select name="rol" class="form-select" required>
+                                    <option value="usuario" <?php echo ($usuario_a_editar['rol'] == 'usuario') ? 'selected' : ''; ?>>Usuario Estándar</option>
+                                    <option value="admin" <?php echo ($usuario_a_editar['rol'] == 'admin') ? 'selected' : ''; ?>>Administrador Global</option>
+                                    <option value="tecnico" <?php echo ($usuario_a_editar['rol'] == 'tecnico') ? 'selected' : ''; ?>>Técnico TI</option>
+                                </select>
+                            </div>
+                            <div class="col-md-12 mb-4">
+                                <label class="form-label small text-white-50 fw-bold">ASIGNAR NUEVA CONTRASEÑA (OPCIONAL)</label>
+                                <input type="password" name="nueva_password" class="form-control" placeholder="Dejar en blanco para no modificar">
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex gap-3 mt-2">
+                            <button type="button" class="btn btn-secondary w-50 py-3 fw-bold" data-bs-dismiss="modal" style="border-radius: 14px;">Cancelar</button>
+                            <button type="submit" name="btn_actualizar_usuario" class="btn btn-warning w-50 py-3 fw-bold text-dark" style="border-radius: 14px;">Actualizar Registro</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <div class="modal fade" id="modalRecuperar" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content" style="background: #0f172a; border: 1px solid var(--neon-blue); border-radius: 25px; box-shadow: 0 0 40px rgba(56, 189, 248, 0.4);">
@@ -515,13 +794,108 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_recuperar'])) {
             }
         }
 
-        // Si PHP valida exitosamente las credenciales de administrador, abre automáticamente el modal de registro estructurado.
-        <?php if ($mostrar_modal_registro): ?>
-            document.addEventListener("DOMContentLoaded", function() {
+        document.addEventListener("DOMContentLoaded", function() {
+            // Controladores de modales de persistencia PHP
+            <?php if ($mostrar_modal_registro): ?>
                 var modalRegistro = new bootstrap.Modal(document.getElementById('modalRegistro'));
                 modalRegistro.show();
-            });
-        <?php endif; ?>
+            <?php endif; ?>
+
+            <?php if ($mostrar_modal_editar && $usuario_a_editar): ?>
+                var modalEditar = new bootstrap.Modal(document.getElementById('modalEditarUsuario'));
+                modalEditar.show();
+            <?php endif; ?>
+
+            <?php if ($mostrar_modal_baja): ?>
+                var modalBaja = new bootstrap.Modal(document.getElementById('modalBajaUsuario'));
+                modalBaja.show();
+            <?php endif; ?>
+
+            // LÓGICA DEL BUSCADOR INTERACTIVO EN TIEMPO REAL (BAJA)
+            const inputBuscarBaja = document.getElementById('inputBuscarBaja');
+            const listaResultadosBaja = document.getElementById('listaResultadosBaja');
+            const formConfirmarBaja = document.getElementById('formConfirmarBaja');
+            const idBajaTarget = document.getElementById('idBajaTarget');
+            const textTargetBaja = document.getElementById('textTargetBaja');
+            const btnVolverBajaDefault = document.getElementById('btnVolverBajaDefault');
+
+            if (inputBuscarBaja) {
+                inputBuscarBaja.addEventListener('input', function() {
+                    let valor = this.value.trim();
+                    if (valor.length < 1) {
+                        listaResultadosBaja.classList.add('d-none');
+                        formConfirmarBaja.classList.add('d-none');
+                        btnVolverBajaDefault.classList.remove('d-none');
+                        return;
+                    }
+
+                    fetch(`index.php?action=buscar_nodo_baja&term=${encodeURIComponent(valor)}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            listaResultadosBaja.innerHTML = '';
+                            if (data.length > 0) {
+                                listaResultadosBaja.classList.remove('d-none');
+                                data.forEach(u => {
+                                    let li = document.createElement('li');
+                                    li.innerHTML = `<i class="bi bi-person-fill text-danger me-2"></i>ID: <strong>${u.id}</strong> | <strong>${u.nombre_completo}</strong> (${u.usuario})<br><small class="text-white-50 ms-4">DNI: ${u.dni} | Rol: ${u.rol} | Área: ${u.area}</small>`;
+                                    li.addEventListener('click', function() {
+                                        idBajaTarget.value = u.id;
+                                        textTargetBaja.innerText = `${u.nombre_completo} [${u.usuario}]`;
+                                        
+                                        formConfirmarBaja.classList.remove('d-none');
+                                        listaResultadosBaja.classList.add('d-none');
+                                        btnVolverBajaDefault.classList.add('d-none');
+                                    });
+                                    listaResultadosBaja.appendChild(li);
+                                });
+                            } else {
+                                listaResultadosBaja.classList.remove('d-none');
+                                listaResultadosBaja.innerHTML = '<li class="text-muted text-center py-2 small">Ninguna coincidencia en el servidor.</li>';
+                            }
+                        });
+                });
+            }
+
+            // NUEVO: LÓGICA DEL BUSCADOR INTERACTIVO EN TIEMPO REAL (MODIFICAR/EDITAR)
+            const inputBuscarEditar = document.getElementById('inputBuscarEditar');
+            const listaResultadosEditar = document.getElementById('listaResultadosEditar');
+            const formConfirmarEditar = document.getElementById('formConfirmarEditar');
+            const idEditarTarget = document.getElementById('idEditarTarget');
+
+            if (inputBuscarEditar) {
+                inputBuscarEditar.addEventListener('input', function() {
+                    let valor = this.value.trim();
+                    if (valor.length < 1) {
+                        listaResultadosEditar.classList.add('d-none');
+                        return;
+                    }
+
+                    fetch(`index.php?action=buscar_nodo_editar&term=${encodeURIComponent(valor)}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            listaResultadosEditar.innerHTML = '';
+                            if (data.length > 0) {
+                                listaResultadosEditar.classList.remove('d-none');
+                                data.forEach(u => {
+                                    let li = document.createElement('li');
+                                    li.innerHTML = `<i class="bi bi-pencil-fill text-warning me-2"></i>ID: <strong>${u.id}</strong> | <strong>${u.nombre_completo}</strong> (${u.usuario})<br><small class="text-white-50 ms-4">DNI: ${u.dni} | Rol: ${u.rol} | Área: ${u.area}</small>`;
+                                    li.addEventListener('click', function() {
+                                        // Rellenar el formulario oculto con el ID exacto del nodo seleccionado
+                                        idEditarTarget.value = u.id;
+                                        listaResultadosEditar.classList.add('d-none');
+                                        // Enviar formulario automáticamente para refrescar y levantar el modal de edición
+                                        formConfirmarEditar.submit();
+                                    });
+                                    listaResultadosEditar.appendChild(li);
+                                });
+                            } else {
+                                listaResultadosEditar.classList.remove('d-none');
+                                listaResultadosEditar.innerHTML = '<li class="text-muted text-center py-2 small">Ninguna coincidencia en el servidor.</li>';
+                            }
+                        });
+                });
+            }
+        });
     </script>
 </body>
 </html>
