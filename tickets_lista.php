@@ -11,6 +11,28 @@ if (!isset($_SESSION['usuario'])) {
 $usuario_id = $_SESSION['usuario_id'];
 $rol = $_SESSION['rol'];
 
+// OBTENER FOTO DE PERFIL DEL USUARIO
+$usuario_actual = $_SESSION['usuario'] ?? '';
+$stmt_user = $conexion->prepare("SELECT foto_perfil FROM usuarios WHERE usuario = ? OR email = ? LIMIT 1");
+$stmt_user->bind_param("ss", $usuario_actual, $usuario_actual);
+$stmt_user->execute();
+$res_user = $stmt_user->get_result();
+$user_db = $res_user->fetch_assoc();
+
+$foto_db = trim($user_db['foto_perfil'] ?? '');
+$avatar_default = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="%2394a3b8"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>';
+
+$foto_perfil = $avatar_default;
+if (!empty($foto_db)) {
+    if (filter_var($foto_db, FILTER_VALIDATE_URL)) {
+        $foto_perfil = $foto_db;
+    } elseif (file_exists('img/' . $foto_db)) {
+        $foto_perfil = 'img/' . $foto_db;
+    } elseif (file_exists($foto_db)) {
+        $foto_perfil = $foto_db;
+    }
+}
+
 // --- CAPTURA DE FILTROS Y BÚSQUEDA ---
 $filtro_estado = $_GET['estado'] ?? '';
 $filtro_depto = $_GET['departamento'] ?? ''; 
@@ -128,6 +150,20 @@ if($deptos_res) {
         .logo-img { height: 35px; }
         .nav-link-neo { text-decoration: none; padding: 8px 16px; border-radius: 10px; font-size: 0.9rem; color: var(--text-gray); display: flex; align-items: center; gap: 8px; transition: 0.2s; }
         .nav-link-neo:hover { color: #fff; background: rgba(255, 255, 255, 0.05); }
+
+        .logout-btn {
+            color: #f87171;
+            border: 1px solid rgba(248, 113, 113, 0.2);
+        }
+
+        .user-avatar {
+            width: 38px;
+            height: 38px;
+            object-fit: cover;
+            border-radius: 50%;
+            border: 2px solid var(--accent);
+            background-color: var(--card-bg);
+        }
         
         .card-stat { background: var(--card-bg); border-radius: 15px; border: 1px solid rgba(255,255,255,0.05); padding: 15px; text-align: center; text-decoration: none; display: block; transition: 0.2s; }
         .card-stat:hover { border-color: var(--accent); transform: translateY(-2px); }
@@ -184,10 +220,27 @@ if($deptos_res) {
             <img src="img/logo_neoadmin.png" alt="Logo" class="logo-img">
             <span style="font-family: 'Orbitron'; font-size: 1.1rem; color: var(--accent); font-weight: bold;">NEO ADMIN</span>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex align-items-center gap-2">
             <a href="dashboard.php" class="nav-link-neo"><i class="bi bi-house-door"></i> Inicio</a>
             <a href="tickets_lista.php" class="nav-link-neo" style="background: var(--accent-soft); color: var(--accent);"><i class="bi bi-headset"></i> Mesa de Ayuda</a>
-            <a href="logout.php" class="nav-link-neo text-danger opacity-75"><i class="bi bi-box-arrow-right"></i> Salir</a>
+            <div class="vr mx-2 opacity-25" style="height: 20px; align-self: center;"></div>
+
+            <!-- Foto de perfil y menú desplegable -->
+            <div class="dropdown me-2">
+                <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle" id="userMenuHeader" data-bs-toggle="dropdown" aria-expanded="false">
+                    <img src="<?php echo htmlspecialchars($foto_perfil); ?>" alt="Perfil" class="user-avatar me-2">
+                    <span class="fw-bold small d-none d-md-inline"><?php echo htmlspecialchars($_SESSION['usuario']); ?></span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end shadow-lg rounded-4" aria-labelledby="userMenuHeader">
+                    <li><a class="dropdown-item py-2" href="perfil.php"><i class="bi bi-person-fill me-2"></i> Mi Perfil</a></li>
+                    <li><hr class="dropdown-divider opacity-25"></li>
+                    <li><a class="dropdown-item py-2 text-danger" href="logout.php"><i class="bi bi-box-arrow-right me-2"></i> Cerrar Sesión</a></li>
+                </ul>
+            </div>
+
+            <a href="logout.php" class="nav-link-neo logout-btn d-none d-md-flex">
+                <i class="bi bi-box-arrow-right"></i>
+            </a>
         </div>
     </nav>
 

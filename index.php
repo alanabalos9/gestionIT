@@ -47,12 +47,13 @@ function enviarCorreo($destinatario, $asunto, $cuerpo) {
     }
 }
 
-// 1. LÓGICA DE LOGIN NORMAL
+// 1. LÓGICA DE LOGIN NORMAL CON VERIFICACIÓN DE CADUCIDAD DE CONTRASEÑA
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_login'])) {
     $user = $_POST['usuario'];
     $pass = $_POST['password'];
 
-    $stmt = $conexion->prepare("SELECT id, usuario, password, rol FROM usuarios WHERE usuario = ?");
+    // Se eliminó 'created_at' de la consulta para solucionar la excepción mysqli
+    $stmt = $conexion->prepare("SELECT id, usuario, password, rol, foto_perfil, ultima_modificacion_pass FROM usuarios WHERE usuario = ?");
     $stmt->bind_param("s", $user);
     $stmt->execute();
     $resultado = $stmt->get_result();
@@ -60,10 +61,40 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_login'])) {
     if ($row = $resultado->fetch_assoc()) {
         if (password_verify($pass, $row['password']) || $pass == $row['password']) {
             $_SESSION['usuario_id'] = $row['id'];
-            $_SESSION['usuario'] = $row['usuario'];
-            $_SESSION['rol'] = $row['rol'];
-            header("Location: dashboard.php");
-            exit();
+            $_SESSION['usuario']    = $row['usuario'];
+            $_SESSION['rol']        = $row['rol'];
+            $_SESSION['foto_perfil'] = !empty($row['foto_perfil']) ? $row['foto_perfil'] : 'default.png';
+
+            // --- CÁLCULO DE CADUCIDAD DE CONTRASEÑA ---
+            $fecha_pass_str = $row['ultima_modificacion_pass'] ?? null;
+            $dias_restantes = 30;
+
+            if (!empty($fecha_pass_str)) {
+                $fecha_pass = new DateTime($fecha_pass_str);
+                $fecha_actual = new DateTime();
+                $dias_transcurridos = (int)$fecha_actual->diff($fecha_pass)->days;
+                $dias_restantes = max(0, 30 - $dias_transcurridos);
+            } else {
+                $dias_restantes = 0;
+            }
+
+            if ($dias_restantes <= 0) {
+                // Caso 1: Clave vencida -> Redirección forzada a perfil
+                $_SESSION['forzar_cambio_clave'] = true;
+                header("Location: perfil.php?expirado=1");
+                exit();
+            } else {
+                $_SESSION['forzar_cambio_clave'] = false;
+                
+                // Caso 2: 7 días o menos -> Marcar para mostrar advertencia en el dashboard
+                if ($dias_restantes <= 7) {
+                    $_SESSION['mostrar_alerta_clave'] = true;
+                    $_SESSION['dias_restantes_clave'] = $dias_restantes;
+                }
+                
+                header("Location: dashboard.php");
+                exit();
+            }
         } else {
             $error = "Acceso denegado: Credenciales inválidas.";
         }
@@ -108,6 +139,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'
     $area            = trim($_POST['area']);
     $pass1           = $_POST['nueva_password'];
 
+    // Procesamiento de foto de perfil
+    $nombre_foto = 'default.png';
+    if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
+        $fileTmpPath   = $_FILES['foto_perfil']['tmp_name'];
+        $fileName      = $_FILES['foto_perfil']['name'];
+        $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+        $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+
+        if (in_array($fileExtension, $allowedExtensions)) {
+            $nombre_foto = 'user_' . time() . '_' . uniqid() . '.' . $fileExtension;
+            $uploadFileDir = 'img/';
+            if (!is_dir($uploadFileDir)) {
+                mkdir($uploadFileDir, 0755, true);
+            }
+            move_uploaded_file($fileTmpPath, $uploadFileDir . $nombre_foto);
+        }
+    }
+
     // Verificar duplicados (Usuario, Email o DNI)
     $stmt_check = $conexion->prepare("SELECT id FROM usuarios WHERE usuario = ? OR email = ? OR dni = ?");
     $stmt_check->bind_param("sss", $nuevo_user, $email, $dni);
@@ -119,9 +168,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'
         $mostrar_modal_registro = true;
     } else {
         $pass_hash = password_hash($pass1, PASSWORD_BCRYPT);
+        $fecha_actual = date('Y-m-d H:i:s');
 
-        $stmt_ins = $conexion->prepare("INSERT INTO usuarios (nombre_completo, usuario, email, dni, password, rol, area) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt_ins->bind_param("sssssss", $nombre_completo, $nuevo_user, $email, $dni, $pass_hash, $rol, $area);
+        $stmt_ins = $conexion->prepare("INSERT INTO usuarios (nombre_completo, usuario, email, dni, password, rol, area, foto_perfil, ultima_modificacion_pass) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt_ins->bind_param("sssssssss", $nombre_completo, $nuevo_user, $email, $dni, $pass_hash, $rol, $area, $nombre_foto, $fecha_actual);
 
         if ($stmt_ins->execute()) {
             $success = "Ficha de usuario e identidad sincronizadas con éxito en el sistema.";
@@ -167,7 +217,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_buscar_editar'])) 
 
 // LÓGICA DE ACTUALIZACIÓN / GUARDAR EDICIÓN
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_actualizar_usuario'])) {
-    $id_edit = $_POST['id_editar'];
+    $id_edit         = $_POST['id_editar'];
     $nombre_completo = trim($_POST['nombre_completo']);
     $nuevo_user      = trim($_POST['nuevo_usuario']);
     $email           = trim($_POST['email']);
@@ -185,18 +235,47 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_actualizar_usuario
     if ($res_check->num_rows > 0) {
         $error = "Error de conflicto: Los nuevos datos ingresados pertenecen a otra entidad de la red.";
     } else {
-        if (!empty($pass1)) {
-            // Si el admin ingresó una nueva contraseña, se hashea y se actualiza
+        // Verificar si se subió una nueva foto en la edición
+        $nueva_foto = null;
+        if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
+            $fileTmpPath   = $_FILES['foto_perfil']['tmp_name'];
+            $fileName      = $_FILES['foto_perfil']['name'];
+            $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+            $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+
+            if (in_array($fileExtension, $allowedExtensions)) {
+                $nueva_foto = 'user_' . time() . '_' . uniqid() . '.' . $fileExtension;
+                $uploadFileDir = 'img/';
+                if (!is_dir($uploadFileDir)) {
+                    mkdir($uploadFileDir, 0755, true);
+                }
+                move_uploaded_file($fileTmpPath, $uploadFileDir . $nueva_foto);
+            }
+        }
+
+        $fecha_actual = date('Y-m-d H:i:s');
+
+        // Construcción de consulta dinámica según si cambia password o foto
+        if (!empty($pass1) && $nueva_foto !== null) {
             $pass_hash = password_hash($pass1, PASSWORD_BCRYPT);
-            $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, password=?, rol=?, area=? WHERE id=?");
-            $stmt_upd->bind_param("sssssssi", $nombre_completo, $nuevo_user, $email, $dni, $pass_hash, $rol, $area, $id_edit);
+            $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, password=?, rol=?, area=?, foto_perfil=?, ultima_modificacion_pass=? WHERE id=?");
+            $stmt_upd->bind_param("sssssssssi", $nombre_completo, $nuevo_user, $email, $dni, $pass_hash, $rol, $area, $nueva_foto, $fecha_actual, $id_edit);
+        } else if (!empty($pass1)) {
+            $pass_hash = password_hash($pass1, PASSWORD_BCRYPT);
+            $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, password=?, rol=?, area=?, ultima_modificacion_pass=? WHERE id=?");
+            $stmt_upd->bind_param("ssssssssi", $nombre_completo, $nuevo_user, $email, $dni, $pass_hash, $rol, $area, $fecha_actual, $id_edit);
+        } else if ($nueva_foto !== null) {
+            $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, rol=?, area=?, foto_perfil=? WHERE id=?");
+            $stmt_upd->bind_param("sssssssi", $nombre_completo, $nuevo_user, $email, $dni, $rol, $area, $nueva_foto, $id_edit);
         } else {
-            // Si vino vacía, se conserva la contraseña existente en la base de datos
             $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, rol=?, area=? WHERE id=?");
             $stmt_upd->bind_param("ssssssi", $nombre_completo, $nuevo_user, $email, $dni, $rol, $area, $id_edit);
         }
 
         if ($stmt_upd->execute()) {
+            if (isset($_SESSION['usuario_id']) && $_SESSION['usuario_id'] == $id_edit && $nueva_foto !== null) {
+                $_SESSION['foto_perfil'] = $nueva_foto;
+            }
             $success = "La ficha de identidad y privilegios del usuario han sido actualizados con éxito.";
         } else {
             $error = "Error de sistema: Fallo al reescribir la matriz de datos.";
@@ -241,7 +320,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_baja' && isset($_G
     exit();
 }
 
-// NUEVO: Mini endpoint para la búsqueda interactiva asíncrona de usuarios a editar/modificar
+// Mini endpoint para la búsqueda interactiva asíncrona de usuarios a editar/modificar
 if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($_GET['term'])) {
     ob_clean();
     header('Content-Type: application/json');
@@ -453,7 +532,6 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
             display: flex; justify-content: space-between;
         }
         
-        /* Estilos personalizados para las listas de búsqueda sugerida */
         .search-results-list {
             max-height: 180px;
             overflow-y: auto;
@@ -570,7 +648,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                         <p class="text-white-50 small">Complete los campos de identidad solicitados para el registro en la infraestructura.</p>
                     </div>
                     
-                    <form action="index.php" method="POST">
+                    <form action="index.php" method="POST" enctype="multipart/form-data">
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label small text-white-50 fw-bold">NOMBRE Y APELLIDO completo</label>
@@ -600,9 +678,13 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                                     <option value="tecnico">Técnico TI</option>
                                 </select>
                             </div>
-                            <div class="col-md-12 mb-4">
+                            <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">CONTRASEÑA ASIGNADA</label>
                                 <input type="password" name="nueva_password" class="form-control" placeholder="••••••••" required>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <label class="form-label small text-white-50 fw-bold">FOTO DE PERFIL (OPCIONAL)</label>
+                                <input type="file" name="foto_perfil" class="form-control" accept="image/*">
                             </div>
                         </div>
                         
@@ -698,7 +780,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                         <p class="text-white-50 small">Modifique los campos correspondientes. Deje la contraseña en blanco si prefiere conservar la actual.</p>
                     </div>
                     
-                    <form action="index.php" method="POST">
+                    <form action="index.php" method="POST" enctype="multipart/form-data">
                         <input type="hidden" name="id_editar" value="<?php echo $usuario_a_editar['id']; ?>">
                         <div class="row">
                             <div class="col-md-6 mb-3">
@@ -729,9 +811,13 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                                     <option value="tecnico" <?php echo ($usuario_a_editar['rol'] == 'tecnico') ? 'selected' : ''; ?>>Técnico TI</option>
                                 </select>
                             </div>
-                            <div class="col-md-12 mb-4">
+                            <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">ASIGNAR NUEVA CONTRASEÑA (OPCIONAL)</label>
                                 <input type="password" name="nueva_password" class="form-control" placeholder="Dejar en blanco para no modificar">
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <label class="form-label small text-white-50 fw-bold">CAMBIAR FOTO DE PERFIL (OPCIONAL)</label>
+                                <input type="file" name="foto_perfil" class="form-control" accept="image/*">
                             </div>
                         </div>
                         
@@ -795,7 +881,6 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
         }
 
         document.addEventListener("DOMContentLoaded", function() {
-            // Controladores de modales de persistencia PHP
             <?php if ($mostrar_modal_registro): ?>
                 var modalRegistro = new bootstrap.Modal(document.getElementById('modalRegistro'));
                 modalRegistro.show();
@@ -811,7 +896,6 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                 modalBaja.show();
             <?php endif; ?>
 
-            // LÓGICA DEL BUSCADOR INTERACTIVO EN TIEMPO REAL (BAJA)
             const inputBuscarBaja = document.getElementById('inputBuscarBaja');
             const listaResultadosBaja = document.getElementById('listaResultadosBaja');
             const formConfirmarBaja = document.getElementById('formConfirmarBaja');
@@ -856,7 +940,6 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                 });
             }
 
-            // NUEVO: LÓGICA DEL BUSCADOR INTERACTIVO EN TIEMPO REAL (MODIFICAR/EDITAR)
             const inputBuscarEditar = document.getElementById('inputBuscarEditar');
             const listaResultadosEditar = document.getElementById('listaResultadosEditar');
             const formConfirmarEditar = document.getElementById('formConfirmarEditar');
@@ -880,10 +963,8 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                                     let li = document.createElement('li');
                                     li.innerHTML = `<i class="bi bi-pencil-fill text-warning me-2"></i>ID: <strong>${u.id}</strong> | <strong>${u.nombre_completo}</strong> (${u.usuario})<br><small class="text-white-50 ms-4">DNI: ${u.dni} | Rol: ${u.rol} | Área: ${u.area}</small>`;
                                     li.addEventListener('click', function() {
-                                        // Rellenar el formulario oculto con el ID exacto del nodo seleccionado
                                         idEditarTarget.value = u.id;
                                         listaResultadosEditar.classList.add('d-none');
-                                        // Enviar formulario automáticamente para refrescar y levantar el modal de edición
                                         formConfirmarEditar.submit();
                                     });
                                     listaResultadosEditar.appendChild(li);

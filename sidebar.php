@@ -2,6 +2,11 @@
 // sidebar.php
 $rol_actual = $_SESSION['rol'] ?? 'operativo';
 $pagina_actual = basename($_SERVER['PHP_SELF']);
+
+// Definir la ruta de la foto de perfil del usuario o fallback a avatar predeterminado
+$foto_perfil = !empty($_SESSION['foto_perfil']) && file_exists('uploads/' . $_SESSION['foto_perfil'])
+    ? 'uploads/' . $_SESSION['foto_perfil']
+    : 'https://ui-avatars.com/api/?name=' . urlencode($_SESSION['usuario'] ?? 'Usuario') . '&background=0D6EFD&color=fff';
 ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 
@@ -35,11 +40,13 @@ $pagina_actual = basename($_SERVER['PHP_SELF']);
     <hr class="opacity-25">
     <div class="dropdown">
         <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle bg-white bg-opacity-10 p-2 rounded-4" id="dropdownUser1" data-bs-toggle="dropdown" aria-expanded="false">
-            <img src="https://ui-avatars.com/api/?name=<?php echo $_SESSION['usuario']; ?>&background=0D6EFD&color=fff" alt="" width="32" height="32" class="rounded-circle me-2">
-            <span class="small fw-bold"><?php echo strtoupper($_SESSION['usuario']); ?></span>
+            <img src="<?php echo htmlspecialchars($foto_perfil); ?>" alt="Foto de perfil" width="32" height="32" class="rounded-circle me-2" style="object-fit: cover;">
+            <span class="small fw-bold"><?php echo htmlspecialchars(strtoupper($_SESSION['usuario'] ?? '')); ?></span>
         </a>
         <ul class="dropdown-menu dropdown-menu-dark text-small shadow-lg rounded-4" aria-labelledby="dropdownUser1">
-            <li><a class="dropdown-item py-2" href="logout.php"><i class="bi bi-box-arrow-right me-2"></i> Cerrar Sesión</a></li>
+            <li><a class="dropdown-item py-2" href="perfil.php"><i class="bi bi-person-fill me-2"></i> Mi Perfil</a></li>
+            <li><hr class="dropdown-divider opacity-25"></li>
+            <li><a class="dropdown-item py-2 text-danger" href="logout.php"><i class="bi bi-box-arrow-right me-2"></i> Cerrar Sesión</a></li>
         </ul>
     </div>
 </div>

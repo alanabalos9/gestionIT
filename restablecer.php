@@ -5,7 +5,7 @@ require_once 'db.php'; // Conexión a la base de datos
 $mensaje = "";
 $error = "";
 
-// Verificamos que el usuario venga en la URL (simulación de enlace de correo)
+// Verificamos que el parámetro venga en la URL (puede ser email o usuario)
 if (isset($_GET['user'])) {
     $usuario_target = $_GET['user'];
 } else {
@@ -18,18 +18,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $confirmar_pass = $_POST['confirmar_password'];
 
     if ($nueva_pass === $confirmar_pass) {
-        // Encriptar la contraseña antes de guardarla (RECOMENDADO)
-        // Asegúrate de que la columna 'password' en tu base de datos sea VARCHAR(255)
-        $pass_encriptada = password_hash($nueva_pass, PASSWORD_DEFAULT);
+        $pass_encriptada = password_hash($nueva_pass, PASSWORD_BCRYPT);
+        $fecha_actual = date('Y-m-d H:i:s');
 
-        // Actualizamos la base de datos
-        $stmt = $conexion->prepare("UPDATE usuarios SET password = ? WHERE usuario = ?");
-        $stmt->bind_param("ss", $pass_encriptada, $usuario_target);
+        // Se busca por 'email OR usuario' y se actualiza 'ultima_modificacion_pass'
+        $stmt = $conexion->prepare("UPDATE usuarios SET password = ?, ultima_modificacion_pass = ? WHERE email = ? OR usuario = ?");
+        $stmt->bind_param("ssss", $pass_encriptada, $fecha_actual, $usuario_target, $usuario_target);
         
         if ($stmt->execute()) {
-            $mensaje = "Contraseña actualizada con éxito. Ya puede iniciar sesión.";
+            if ($stmt->affected_rows > 0) {
+                $mensaje = "Contraseña actualizada con éxito. Ya puede iniciar sesión.";
+            } else {
+                $error = "No se encontró ningún usuario vinculado con las credenciales proporcionadas.";
+            }
         } else {
-            $error = "Error al actualizar la contraseña.";
+            $error = "Error de sistema al actualizar la contraseña.";
         }
     } else {
         $error = "Las contraseñas no coinciden.";
@@ -58,7 +61,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
 
         body {
-            /* Imagen de fondo solicitada */
             background-image: url('img/neoadmin.png');
             background-size: cover;
             background-position: center;
@@ -76,7 +78,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             position: relative;
         }
 
-        /* Overlay oscuro y malla de Matrix sobre la imagen */
         body::before {
             content: "";
             position: absolute;
@@ -224,7 +225,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             border-color: rgba(239, 68, 68, 0.4);
             box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
         }
-
     </style>
 </head>
 <body>
