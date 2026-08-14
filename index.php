@@ -29,7 +29,7 @@ function enviarCorreo($destinatario, $asunto, $cuerpo) {
         $mail->Host       = 'smtp.gmail.com'; 
         $mail->SMTPAuth   = true;
         $mail->Username   = 'testadministrador@gmail.com'; 
-        $mail->Password   = 'gzzwnfrsslrikscl'; 
+        $mail->Password   = ''; 
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = 587;
 
