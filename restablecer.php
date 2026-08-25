@@ -1,41 +1,146 @@
 <?php
 session_start();
-require_once 'db.php'; // Conexión a la base de datos
+require_once 'db.php'; // Conexión a la base de datos[cite: 9]
+
+// 1. Importar clases de PHPMailer[cite: 9]
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+require 'PHPMailer/Exception.php';
+require 'PHPMailer/PHPMailer.php';
+require 'PHPMailer/SMTP.php';
+
+// Función para enviar correo mediante PHPMailer[cite: 9]
+function enviarCorreoRestablecimiento($destinatario, $token, $url_restablecer) {
+    $mail = new PHPMailer(true);
+    try {
+        // Configuración del servidor SMTP (Gmail)[cite: 9]
+        $mail->isSMTP();
+        $mail->Host       = 'smtp.gmail.com'; 
+        $mail->SMTPAuth   = true;
+        $mail->Username   = 'testadministrador@gmail.com'; 
+        $mail->Password   = 'qybz utdg jdor lacj'; 
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = 587;
+        $mail->CharSet    = 'UTF-8';
+
+        // Emisor y Receptor[cite: 9]
+        $mail->setFrom('testadministrador@gmail.com', 'NEO ADMIN SYSTEM');
+        $mail->addAddress($destinatario); 
+
+        // Contenido del correo en HTML[cite: 9]
+        $mail->isHTML(true);
+        $mail->Subject = "Código y Enlace para Restablecer Contraseña - NEO ADMIN";
+        
+        $mail->Body = "
+        <div style='background-color: #020617; color: #ffffff; padding: 30px; font-family: Arial, sans-serif; border-radius: 10px;'>
+            <h2 style='color: #38bdf8; text-align: center;'>NEO ADMIN SYSTEM</h2>
+            <p>Hola,</p>
+            <p>Hemos recibido una solicitud para restablecer tu contraseña.</p>
+            <div style='background-color: rgba(56, 189, 248, 0.1); border: 1px solid #38bdf8; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #38bdf8; margin: 20px 0; border-radius: 8px;'>
+                $token
+            </div>
+            <p>Tu código de verificación es de 6 dígitos. Este código y el enlace expiran en <strong>15 minutos</strong>.</p>
+            <p style='text-align: center; margin-top: 25px;'>
+                <a href='$url_restablecer' style='background-color: #38bdf8; color: #020617; padding: 12px 25px; text-decoration: none; font-weight: bold; border-radius: 5px; display: inline-block;'>RESTABLECER CONTRASEÑA</a>
+            </p>
+            <p style='margin-top: 20px; font-size: 12px; color: #94a3b8;'>Si el botón no funciona, copia y pega la siguiente URL en tu navegador:<br><a href='$url_restablecer' style='color: #38bdf8;'>$url_restablecer</a></p>
+        </div>";
+
+        // Texto alternativo plano[cite: 9]
+        $mail->AltBody = "Tu código de confirmación es: $token\nEnlace para restablecer: $url_restablecer\n\nEste código expira en 15 minutos.";
+
+        $mail->send();
+        return true;
+    } catch (Exception $e) {
+        error_log("Error al enviar correo PHPMailer: " . $mail->ErrorInfo);
+        return false;
+    }
+}
 
 $mensaje = "";
 $error = "";
 
-// Verificamos que el parámetro venga en la URL (puede ser email o usuario)
+// 2. Validar el parámetro inicial de la URL[cite: 9]
 if (isset($_GET['user'])) {
-    $usuario_target = $_GET['user'];
+    $usuario_target = trim($_GET['user']);
 } else {
     header("Location: index.php");
     exit();
 }
 
+// 3. Si se accede por GET (primera vez desde el enlace), se genera y envía el Token[cite: 9]
+if ($_SERVER["REQUEST_METHOD"] == "GET") {
+    // Buscar el email y el ID del usuario en la base de datos
+    $stmt_email = $conexion->prepare("SELECT id, email FROM usuarios WHERE email = ? OR usuario = ?");
+    $stmt_email->bind_param("ss", $usuario_target, $usuario_target);
+    $stmt_email->execute();
+    $res_email = $stmt_email->get_result();
+
+    if ($row = $res_email->fetch_assoc()) {
+        $user_id = $row['id'];
+        $email_destino = $row['email'];
+        
+        // Generar token numérico de 6 dígitos y tiempo de expiración (15 minutos)[cite: 9]
+        $token = sprintf("%06d", mt_rand(0, 999999));
+        $expiracion = date('Y-m-d H:i:s', strtotime('+15 minutes'));
+
+        // Guardar token y expiración usando el ID directo[cite: 9]
+        $stmt_token = $conexion->prepare("UPDATE usuarios SET reset_token = ?, reset_token_expira = ? WHERE id = ?");
+        $stmt_token->bind_param("ssi", $token, $expiracion, $user_id);
+        $stmt_token->execute();
+
+        // Construir la URL dinámica actual para el enlace de restablecimiento[cite: 9]
+        $protocolo = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? "https" : "http";
+        $url_restablecer = $protocolo . "://" . $_SERVER['HTTP_HOST'] . $_SERVER['SCRIPT_NAME'] . "?user=" . urlencode($usuario_target);
+
+        // Enviar correo electrónico mediante PHPMailer[cite: 9]
+        if (!enviarCorreoRestablecimiento($email_destino, $token, $url_restablecer)) {
+            $error = "No se pudo enviar el correo de verificación. Por favor intente más tarde.";
+        }
+    } else {
+        $error = "No se encontró ningún usuario vinculado con las credenciales proporcionadas.";
+    }
+}
+
+// 4. Procesar el formulario cuando el usuario envía el token y la nueva contraseña[cite: 9]
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $token_ingresado = trim($_POST['token']);
     $nueva_pass = $_POST['nueva_password'];
     $confirmar_pass = $_POST['confirmar_password'];
 
-    if ($nueva_pass === $confirmar_pass) {
-        $pass_encriptada = password_hash($nueva_pass, PASSWORD_BCRYPT);
+    if (empty($token_ingresado) || empty($nueva_pass) || empty($confirmar_pass)) {
+        $error = "Por favor complete todos los campos.";
+    } elseif ($nueva_pass !== $confirmar_pass) {
+        $error = "Las contraseñas no coinciden.";
+    } else {
         $fecha_actual = date('Y-m-d H:i:s');
 
-        // Se busca por 'email OR usuario' y se actualiza 'ultima_modificacion_pass'
-        $stmt = $conexion->prepare("UPDATE usuarios SET password = ?, ultima_modificacion_pass = ? WHERE email = ? OR usuario = ?");
-        $stmt->bind_param("ssss", $pass_encriptada, $fecha_actual, $usuario_target, $usuario_target);
-        
-        if ($stmt->execute()) {
-            if ($stmt->affected_rows > 0) {
+        // Validar el token y su vigencia obteniendo el ID del usuario
+        $stmt_val = $conexion->prepare("SELECT id FROM usuarios WHERE (email = ? OR usuario = ?) AND reset_token = ? AND reset_token_expira >= ?");
+        $stmt_val->bind_param("ssss", $usuario_target, $usuario_target, $token_ingresado, $fecha_actual);
+        $stmt_val->execute();
+        $res_val = $stmt_val->get_result();
+
+        if ($res_val->num_rows > 0) {
+            $row_user = $res_val->fetch_assoc();
+            $user_id = $row_user['id'];
+
+            // Generar Hash BCRYPT seguro
+            $pass_encriptada = password_hash($nueva_pass, PASSWORD_BCRYPT);
+            
+            // Actualizar la contraseña apuntando al ID exacto en la BD
+            $stmt_upd = $conexion->prepare("UPDATE usuarios SET password = ?, ultima_modificacion_pass = ?, reset_token = NULL, reset_token_expira = NULL WHERE id = ?");
+            $stmt_upd->bind_param("ssi", $pass_encriptada, $fecha_actual, $user_id);
+
+            if ($stmt_upd->execute()) {
                 $mensaje = "Contraseña actualizada con éxito. Ya puede iniciar sesión.";
             } else {
-                $error = "No se encontró ningún usuario vinculado con las credenciales proporcionadas.";
+                $error = "Error de sistema al actualizar la contraseña.";
             }
         } else {
-            $error = "Error de sistema al actualizar la contraseña.";
+            $error = "El código de confirmación es incorrecto o ha expirado.";
         }
-    } else {
-        $error = "Las contraseñas no coinciden.";
     }
 }
 ?>
@@ -66,7 +171,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             background-position: center;
             background-repeat: no-repeat;
             background-attachment: fixed;
-            
             font-family: 'Plus Jakarta Sans', sans-serif;
             color: white;
             height: 100vh;
@@ -251,9 +355,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <div class="status-alert alert-cyber-danger">
                 <i class="bi bi-exclamation-octagon fs-5"></i> <span><?php echo $error; ?></span>
             </div>
+        <?php else: ?>
+            <div class="status-alert alert-cyber-success" style="background: rgba(56, 189, 248, 0.15); color: #7dd3fc; border-color: rgba(56, 189, 248, 0.3);">
+                <i class="bi bi-envelope-check fs-5"></i> <span>Se ha enviado un código de seguridad a su correo.</span>
+            </div>
         <?php endif; ?>
 
         <form method="POST">
+            <div class="mb-4 text-start">
+                <label class="form-label-cyber">CÓDIGO DE CONFIRMACIÓN</label>
+                <div class="input-group input-group-cyber form-control-cyber">
+                    <span class="input-group-text"><i class="bi bi-shield-check"></i></span>
+                    <input type="text" name="token" class="form-control border-0 bg-transparent text-white p-0 ps-3" required placeholder="123456" maxlength="6" autocomplete="off">
+                </div>
+            </div>
             <div class="mb-4 text-start">
                 <label class="form-label-cyber">NUEVA CONTRASEÑA</label>
                 <div class="input-group input-group-cyber form-control-cyber">

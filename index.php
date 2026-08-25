@@ -1,8 +1,8 @@
 <?php
 session_start();
-require_once 'db.php';
+require_once 'db.php'; // Conexión a la base de datos[cite: 10]
 
-// Importar clases de PHPMailer
+// Importar clases de PHPMailer[cite: 10]
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
@@ -12,15 +12,15 @@ require 'PHPMailer/SMTP.php';
 
 $error = "";
 $success = "";
-$mostrar_modal_registro = false; // Bandera de control para levantar el formulario de registro
+$mostrar_modal_registro = false; // Bandera de control para levantar el formulario de registro[cite: 10]
 
-// Banderas para persistencia de modales de administración si hay errores/éxitos específicos
+// Banderas para persistencia de modales de administración si hay errores/éxitos específicos[cite: 10]
 $mostrar_modal_baja = false;
 $mostrar_modal_editar = false;
 $usuario_a_editar = null;
 
 /**
- * Función auxiliar para configurar y enviar correos
+ * Función auxiliar para configurar y enviar correos[cite: 10]
  */
 function enviarCorreo($destinatario, $asunto, $cuerpo) {
     $mail = new PHPMailer(true);
@@ -29,9 +29,10 @@ function enviarCorreo($destinatario, $asunto, $cuerpo) {
         $mail->Host       = 'smtp.gmail.com'; 
         $mail->SMTPAuth   = true;
         $mail->Username   = 'testadministrador@gmail.com'; 
-        $mail->Password   = ''; 
+        $mail->Password   = 'qybz utdg jdor lacj'; 
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = 587;
+        $mail->CharSet    = 'UTF-8';
 
         $mail->setFrom('testadministrador@gmail.com', 'NEO ADMIN SYSTEM');
         $mail->addAddress($destinatario); 
@@ -47,25 +48,26 @@ function enviarCorreo($destinatario, $asunto, $cuerpo) {
     }
 }
 
-// 1. LÓGICA DE LOGIN NORMAL CON VERIFICACIÓN DE CADUCIDAD DE CONTRASEÑA
+// 1. LÓGICA DE LOGIN NORMAL CON VERIFICACIÓN POR USUARIO O EMAIL Y CADUCIDAD DE CONTRASEÑA[cite: 10]
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_login'])) {
-    $user = $_POST['usuario'];
+    $user = trim($_POST['usuario']);
     $pass = $_POST['password'];
 
-    // Se eliminó 'created_at' de la consulta para solucionar la excepción mysqli
-    $stmt = $conexion->prepare("SELECT id, usuario, password, rol, foto_perfil, ultima_modificacion_pass FROM usuarios WHERE usuario = ?");
-    $stmt->bind_param("s", $user);
+    // Buscar si ingresó el nombre de usuario o el correo electrónico[cite: 10]
+    $stmt = $conexion->prepare("SELECT id, usuario, email, password, rol, foto_perfil, ultima_modificacion_pass FROM usuarios WHERE usuario = ? OR email = ?");
+    $stmt->bind_param("ss", $user, $user);
     $stmt->execute();
     $resultado = $stmt->get_result();
 
     if ($row = $resultado->fetch_assoc()) {
+        // Verificar usando password_verify o texto plano (fallback)[cite: 10]
         if (password_verify($pass, $row['password']) || $pass == $row['password']) {
             $_SESSION['usuario_id'] = $row['id'];
             $_SESSION['usuario']    = $row['usuario'];
             $_SESSION['rol']        = $row['rol'];
             $_SESSION['foto_perfil'] = !empty($row['foto_perfil']) ? $row['foto_perfil'] : 'default.png';
 
-            // --- CÁLCULO DE CADUCIDAD DE CONTRASEÑA ---
+            // --- CÁLCULO DE CADUCIDAD DE CONTRASEÑA ---[cite: 10]
             $fecha_pass_str = $row['ultima_modificacion_pass'] ?? null;
             $dias_restantes = 30;
 
@@ -79,14 +81,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_login'])) {
             }
 
             if ($dias_restantes <= 0) {
-                // Caso 1: Clave vencida -> Redirección forzada a perfil
+                // Caso 1: Clave vencida -> Redirección forzada a perfil[cite: 10]
                 $_SESSION['forzar_cambio_clave'] = true;
                 header("Location: perfil.php?expirado=1");
                 exit();
             } else {
                 $_SESSION['forzar_cambio_clave'] = false;
                 
-                // Caso 2: 7 días o menos -> Marcar para mostrar advertencia en el dashboard
+                // Caso 2: 7 días o menos -> Marcar para mostrar advertencia en el dashboard[cite: 10]
                 if ($dias_restantes <= 7) {
                     $_SESSION['mostrar_alerta_clave'] = true;
                     $_SESSION['dias_restantes_clave'] = $dias_restantes;
@@ -99,17 +101,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_login'])) {
             $error = "Acceso denegado: Credenciales inválidas.";
         }
     } else {
-        $error = "Usuario no registrado en la red.";
+        $error = "Usuario o correo no registrado en la red.";
     }
 }
 
-// 2. PASO 1: VERIFICACIÓN DE CREDENCIALES DE ADMINISTRADOR (Filtro de Seguridad)
+// 2. PASO 1: VERIFICACIÓN DE CREDENCIALES DE ADMINISTRADOR (Filtro de Seguridad)[cite: 10]
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_verificar_admin'])) {
-    $admin_user = $_POST['admin_usuario'];
+    $admin_user = trim($_POST['admin_usuario']);
     $admin_pass = $_POST['admin_password'];
 
-    $stmt = $conexion->prepare("SELECT password, rol FROM usuarios WHERE usuario = ?");
-    $stmt->bind_param("s", $admin_user);
+    $stmt = $conexion->prepare("SELECT password, rol FROM usuarios WHERE usuario = ? OR email = ?");
+    $stmt->bind_param("ss", $admin_user, $admin_user);
     $stmt->execute();
     $resultado = $stmt->get_result();
 
@@ -129,7 +131,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_verificar_admin'])
     }
 }
 
-// 3. PASO 2: PROCESAR EL REGISTRO REAL DEL NUEVO USUARIO
+// 3. PASO 2: PROCESAR EL REGISTRO REAL DEL NUEVO USUARIO[cite: 10]
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'])) {
     $nombre_completo = trim($_POST['nombre_completo']);
     $nuevo_user      = trim($_POST['nuevo_usuario']);
@@ -139,7 +141,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'
     $area            = trim($_POST['area']);
     $pass1           = $_POST['nueva_password'];
 
-    // Procesamiento de foto de perfil
+    // Procesamiento de foto de perfil[cite: 10]
     $nombre_foto = 'default.png';
     if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
         $fileTmpPath   = $_FILES['foto_perfil']['tmp_name'];
@@ -157,7 +159,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'
         }
     }
 
-    // Verificar duplicados (Usuario, Email o DNI)
+    // Verificar duplicados (Usuario, Email o DNI)[cite: 10]
     $stmt_check = $conexion->prepare("SELECT id FROM usuarios WHERE usuario = ? OR email = ? OR dni = ?");
     $stmt_check->bind_param("sss", $nuevo_user, $email, $dni);
     $stmt_check->execute();
@@ -182,7 +184,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'
     }
 }
 
-// LÓGICA DE BAJA DE USUARIO (PROCESAMIENTO)
+// LÓGICA DE BAJA DE USUARIO (PROCESAMIENTO)[cite: 10]
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_baja_usuario'])) {
     $id_baja = $_POST['id_baja'];
     
@@ -197,7 +199,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_baja_usuario'])) {
     }
 }
 
-// LÓGICA DE BÚSQUEDA PARA EDITAR (PROCESAMIENTO TRADICIONAL Y DESDE AJAX)
+// LÓGICA DE BÚSQUEDA PARA EDITAR (PROCESAMIENTO TRADICIONAL Y DESDE AJAX)[cite: 10]
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_buscar_editar'])) {
     $busqueda = trim($_POST['busqueda_editar']);
     
@@ -211,11 +213,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_buscar_editar'])) 
         $mostrar_modal_editar = true;
     } else {
         $error = "No se encontró ningún usuario con los criterios especificados para su edición.";
-        $mostrar_modal_registro = true; // Volver al panel anterior
+        $mostrar_modal_registro = true; // Volver al panel anterior[cite: 10]
     }
 }
 
-// LÓGICA DE ACTUALIZACIÓN / GUARDAR EDICIÓN
+// LÓGICA DE ACTUALIZACIÓN / GUARDAR EDICIÓN[cite: 10]
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_actualizar_usuario'])) {
     $id_edit         = $_POST['id_editar'];
     $nombre_completo = trim($_POST['nombre_completo']);
@@ -226,7 +228,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_actualizar_usuario
     $area            = trim($_POST['area']);
     $pass1           = $_POST['nueva_password'];
 
-    // Verificar duplicados excluyendo el usuario actual
+    // Verificar duplicados excluyendo el usuario actual[cite: 10]
     $stmt_check = $conexion->prepare("SELECT id FROM usuarios WHERE (usuario = ? OR email = ? OR dni = ?) AND id != ?");
     $stmt_check->bind_param("sssi", $nuevo_user, $email, $dni, $id_edit);
     $stmt_check->execute();
@@ -235,7 +237,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_actualizar_usuario
     if ($res_check->num_rows > 0) {
         $error = "Error de conflicto: Los nuevos datos ingresados pertenecen a otra entidad de la red.";
     } else {
-        // Verificar si se subió una nueva foto en la edición
+        // Verificar si se subió una nueva foto en la edición[cite: 10]
         $nueva_foto = null;
         if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
             $fileTmpPath   = $_FILES['foto_perfil']['tmp_name'];
@@ -255,7 +257,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_actualizar_usuario
 
         $fecha_actual = date('Y-m-d H:i:s');
 
-        // Construcción de consulta dinámica según si cambia password o foto
+        // Construcción de consulta dinámica según si cambia password o foto[cite: 10]
         if (!empty($pass1) && $nueva_foto !== null) {
             $pass_hash = password_hash($pass1, PASSWORD_BCRYPT);
             $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, password=?, rol=?, area=?, foto_perfil=?, ultima_modificacion_pass=? WHERE id=?");
@@ -283,15 +285,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_actualizar_usuario
     }
 }
 
-// 4. LÓGICA DE RECUPERACIÓN
+// 4. LÓGICA DE RECUPERACIÓN (URL DINÁMICA SEGÚN ENTORNO / DOMINIO)[cite: 10]
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_recuperar'])) {
-    $email_rec = $_POST['email_recuperacion'];
+    $email_rec = trim($_POST['email_recuperacion']);
     
-    $asunto = "🔐 Recuperacion de Acceso - NEO ADMIN";
-    $cuerpo = "<div style='font-family: sans-serif; padding: 20px; background: #0f172a; color: white; border-radius: 15px;'>
-                <h2 style='color: #38bdf8;'>NEO ADMIN</h2>
+    // Construcción dinámica del enlace de restablecimiento
+    $protocolo = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? "https" : "http";
+    $directorio_actual = dirname($_SERVER['SCRIPT_NAME']);
+    $directorio_limpio = ($directorio_actual == '/' || $directorio_actual == '\\') ? '' : $directorio_actual;
+    $url_restablecer = $protocolo . "://" . $_SERVER['HTTP_HOST'] . $directorio_limpio . "/restablecer.php?user=" . urlencode($email_rec);
+
+    $asunto = "🔐 Recuperación de Acceso - NEO ADMIN";
+    $cuerpo = "<div style='font-family: sans-serif; padding: 30px; background: #020617; color: white; border-radius: 15px; border: 1px solid #38bdf8;'>
+                <h2 style='color: #38bdf8; text-align: center;'>NEO ADMIN SYSTEM</h2>
                 <p>Se ha solicitado un enlace de recuperación para esta cuenta.</p>
-                <a href='http://localhost/gestionIT/restablecer.php?user=$email_rec' style='display: inline-block; padding: 10px 20px; background: #38bdf8; color: #0f172a; text-decoration: none; border-radius: 5px; font-weight: bold;'>RESTABLECER CLAVE</a>
+                <p style='text-align: center; margin-top: 20px;'>
+                    <a href='$url_restablecer' style='display: inline-block; padding: 12px 25px; background: #38bdf8; color: #020617; text-decoration: none; border-radius: 5px; font-weight: bold;'>RESTABLECER CLAVE</a>
+                </p>
+                <p style='margin-top: 20px; font-size: 12px; color: #94a3b8;'>Si el botón no funciona, copia y pega la siguiente URL en tu navegador:<br><a href='$url_restablecer' style='color: #38bdf8;'>$url_restablecer</a></p>
                </div>";
 
     if (enviarCorreo($email_rec, $asunto, $cuerpo)) {
@@ -301,7 +312,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_recuperar'])) {
     }
 }
 
-// Mini endpoint para la búsqueda interactiva asíncrona de usuarios a dar de baja
+// Mini endpoint para la búsqueda interactiva asíncrona de usuarios a dar de baja[cite: 10]
 if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_baja' && isset($_GET['term'])) {
     ob_clean();
     header('Content-Type: application/json');
@@ -320,7 +331,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_baja' && isset($_G
     exit();
 }
 
-// Mini endpoint para la búsqueda interactiva asíncrona de usuarios a editar/modificar
+// Mini endpoint para la búsqueda interactiva asíncrona de usuarios a editar/modificar[cite: 10]
 if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($_GET['term'])) {
     ob_clean();
     header('Content-Type: application/json');
@@ -576,10 +587,10 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
 
         <form action="index.php" method="POST">
             <div class="mb-4">
-                <label class="form-label small text-white-50 fw-bold ms-1">USUARIO</label>
+                <label class="form-label small text-white-50 fw-bold ms-1">USUARIO O EMAIL</label>
                 <div class="input-group">
                     <span class="input-group-text bg-transparent border-0 text-white-50"><i class="bi bi-person-badge"></i></span>
-                    <input type="text" name="usuario" class="form-control" placeholder="ID de Usuario" required>
+                    <input type="text" name="usuario" class="form-control" placeholder="Usuario o Correo" required>
                 </div>
             </div>
             <div class="mb-4">
@@ -861,7 +872,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
             <i class="bi bi-x-lg" style="cursor:pointer" onclick="toggleBot()"></i>
         </div>
         <div class="p-4" style="color: #475569;">
-            <p class="small mb-4">¿En que podemos ayudarte? Notifique al administrador de guardia de inmediato.</p>
+            <p class="small mb-4">¿En qué podemos ayudarte? Notifique al administrador de guardia de inmediato.</p>
             <form action="index.php" method="POST">
                 <input type="email" name="email_soporte" class="form-control form-control-sm mb-3" placeholder="Tu correo para contacto" required style="background: #f1f5f9; color: black; border: 1px solid #cbd5e1;">
                 <button type="submit" name="btn_soporte_bot" class="btn btn-dark w-100 fw-bold">ENVIAR REPORTE</button>
