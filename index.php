@@ -1,8 +1,8 @@
 <?php
 session_start();
-require_once 'db.php'; // Conexión a la base de datos[cite: 10]
+require_once 'db.php'; // Conexión a la base de datos
 
-// Importar clases de PHPMailer[cite: 10]
+// Importar clases de PHPMailer
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
@@ -12,15 +12,18 @@ require 'PHPMailer/SMTP.php';
 
 $error = "";
 $success = "";
-$mostrar_modal_registro = false; // Bandera de control para levantar el formulario de registro[cite: 10]
+$mostrar_modal_registro = false; // Bandera de control para levantar el formulario de registro
 
-// Banderas para persistencia de modales de administración si hay errores/éxitos específicos[cite: 10]
+// Banderas para persistencia de modales de administración si hay errores/éxitos específicos
 $mostrar_modal_baja = false;
 $mostrar_modal_editar = false;
 $usuario_a_editar = null;
 
+// Bandera para forzar cambio de clave vencida vía Modal
+$mostrar_modal_cambio_clave = false;
+
 /**
- * Función auxiliar para configurar y enviar correos[cite: 10]
+ * Función auxiliar para configurar y enviar correos
  */
 function enviarCorreo($destinatario, $asunto, $cuerpo) {
     $mail = new PHPMailer(true);
@@ -48,26 +51,22 @@ function enviarCorreo($destinatario, $asunto, $cuerpo) {
     }
 }
 
-// 1. LÓGICA DE LOGIN NORMAL CON VERIFICACIÓN POR USUARIO O EMAIL Y CADUCIDAD DE CONTRASEÑA[cite: 10]
+// 1. LÓGICA DE LOGIN NORMAL CON VERIFICACIÓN POR USUARIO O EMAIL Y CADUCIDAD DE CONTRASEÑA
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_login'])) {
     $user = trim($_POST['usuario']);
     $pass = $_POST['password'];
 
-    // Buscar si ingresó el nombre de usuario o el correo electrónico[cite: 10]
+    // Buscar si ingresó el nombre de usuario o el correo electrónico
     $stmt = $conexion->prepare("SELECT id, usuario, email, password, rol, foto_perfil, ultima_modificacion_pass FROM usuarios WHERE usuario = ? OR email = ?");
     $stmt->bind_param("ss", $user, $user);
     $stmt->execute();
     $resultado = $stmt->get_result();
 
     if ($row = $resultado->fetch_assoc()) {
-        // Verificar usando password_verify o texto plano (fallback)[cite: 10]
+        // Verificar usando password_verify o texto plano (fallback)
         if (password_verify($pass, $row['password']) || $pass == $row['password']) {
-            $_SESSION['usuario_id'] = $row['id'];
-            $_SESSION['usuario']    = $row['usuario'];
-            $_SESSION['rol']        = $row['rol'];
-            $_SESSION['foto_perfil'] = !empty($row['foto_perfil']) ? $row['foto_perfil'] : 'default.png';
-
-            // --- CÁLCULO DE CADUCIDAD DE CONTRASEÑA ---[cite: 10]
+            
+            // --- CÁLCULO DE CADUCIDAD DE CONTRASEÑA ---
             $fecha_pass_str = $row['ultima_modificacion_pass'] ?? null;
             $dias_restantes = 30;
 
@@ -81,14 +80,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_login'])) {
             }
 
             if ($dias_restantes <= 0) {
-                // Caso 1: Clave vencida -> Redirección forzada a perfil[cite: 10]
-                $_SESSION['forzar_cambio_clave'] = true;
-                header("Location: perfil.php?expirado=1");
-                exit();
+                // Caso 1: Clave vencida -> Activar modal de cambio obligatorio sin redirigir
+                $_SESSION['id_caducado'] = $row['id'];
+                $_SESSION['usuario_caducado'] = $row['usuario'];
+                $_SESSION['rol_caducado'] = $row['rol'];
+                $_SESSION['foto_perfil_caducado'] = !empty($row['foto_perfil']) ? $row['foto_perfil'] : 'default.png';
+                
+                $mostrar_modal_cambio_clave = true;
             } else {
+                // Iniciar sesión normal
+                $_SESSION['usuario_id'] = $row['id'];
+                $_SESSION['usuario']    = $row['usuario'];
+                $_SESSION['rol']        = $row['rol'];
+                $_SESSION['foto_perfil'] = !empty($row['foto_perfil']) ? $row['foto_perfil'] : 'default.png';
                 $_SESSION['forzar_cambio_clave'] = false;
                 
-                // Caso 2: 7 días o menos -> Marcar para mostrar advertencia en el dashboard[cite: 10]
+                // Caso 2: 7 días o menos -> Marcar para mostrar advertencia en el dashboard
                 if ($dias_restantes <= 7) {
                     $_SESSION['mostrar_alerta_clave'] = true;
                     $_SESSION['dias_restantes_clave'] = $dias_restantes;
@@ -105,7 +112,47 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_login'])) {
     }
 }
 
-// 2. PASO 1: VERIFICACIÓN DE CREDENCIALES DE ADMINISTRADOR (Filtro de Seguridad)[cite: 10]
+// 1.1 LÓGICA DE PROCESAMIENTO DE CAMBIO OBLIGATORIO DE CLAVE CADUCADA DESDE MODAL
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_cambiar_clave_expirada'])) {
+    $pass1 = $_POST['nueva_password_expirada'];
+    $pass2 = $_POST['confirmar_password_expirada'];
+    $user_id_exp = $_SESSION['id_caducado'] ?? null;
+
+    if (!$user_id_exp) {
+        $error = "Sesión expirada. Intente iniciar sesión nuevamente.";
+    } elseif (empty($pass1) || empty($pass2)) {
+        $error = "Por favor complete ambos campos de contraseña.";
+        $mostrar_modal_cambio_clave = true;
+    } elseif ($pass1 !== $pass2) {
+        $error = "Las contraseñas no coinciden. Intente nuevamente.";
+        $mostrar_modal_cambio_clave = true;
+    } else {
+        $pass_hash = password_hash($pass1, PASSWORD_BCRYPT);
+        $fecha_actual = date('Y-m-d H:i:s');
+
+        $stmt_upd_pass = $conexion->prepare("UPDATE usuarios SET password = ?, ultima_modificacion_pass = ? WHERE id = ?");
+        $stmt_upd_pass->bind_param("ssi", $pass_hash, $fecha_actual, $user_id_exp);
+
+        if ($stmt_upd_pass->execute()) {
+            // Promover las variables temporales a la sesión global e ingresar al sistema
+            $_SESSION['usuario_id']  = $_SESSION['id_caducado'];
+            $_SESSION['usuario']     = $_SESSION['usuario_caducado'];
+            $_SESSION['rol']         = $_SESSION['rol_caducado'];
+            $_SESSION['foto_perfil'] = $_SESSION['foto_perfil_caducado'];
+
+            // Limpiar temporales
+            unset($_SESSION['id_caducado'], $_SESSION['usuario_caducado'], $_SESSION['rol_caducado'], $_SESSION['foto_perfil_caducado']);
+
+            header("Location: dashboard.php");
+            exit();
+        } else {
+            $error = "Error al actualizar la contraseña en la base de datos.";
+            $mostrar_modal_cambio_clave = true;
+        }
+    }
+}
+
+// 2. PASO 1: VERIFICACIÓN DE CREDENCIALES DE ADMINISTRADOR (Filtro de Seguridad)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_verificar_admin'])) {
     $admin_user = trim($_POST['admin_usuario']);
     $admin_pass = $_POST['admin_password'];
@@ -131,7 +178,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_verificar_admin'])
     }
 }
 
-// 3. PASO 2: PROCESAR EL REGISTRO REAL DEL NUEVO USUARIO[cite: 10]
+// 3. PASO 2: PROCESAR EL REGISTRO REAL DEL NUEVO USUARIO
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'])) {
     $nombre_completo = trim($_POST['nombre_completo']);
     $nuevo_user      = trim($_POST['nuevo_usuario']);
@@ -141,7 +188,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'
     $area            = trim($_POST['area']);
     $pass1           = $_POST['nueva_password'];
 
-    // Procesamiento de foto de perfil[cite: 10]
+    // Procesamiento de foto de perfil
     $nombre_foto = 'default.png';
     if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
         $fileTmpPath   = $_FILES['foto_perfil']['tmp_name'];
@@ -159,7 +206,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'
         }
     }
 
-    // Verificar duplicados (Usuario, Email o DNI)[cite: 10]
+    // Verificar duplicados (Usuario, Email o DNI)
     $stmt_check = $conexion->prepare("SELECT id FROM usuarios WHERE usuario = ? OR email = ? OR dni = ?");
     $stmt_check->bind_param("sss", $nuevo_user, $email, $dni);
     $stmt_check->execute();
@@ -184,7 +231,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'
     }
 }
 
-// LÓGICA DE BAJA DE USUARIO (PROCESAMIENTO)[cite: 10]
+// LÓGICA DE BAJA DE USUARIO (PROCESAMIENTO)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_baja_usuario'])) {
     $id_baja = $_POST['id_baja'];
     
@@ -199,7 +246,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_baja_usuario'])) {
     }
 }
 
-// LÓGICA DE BÚSQUEDA PARA EDITAR (PROCESAMIENTO TRADICIONAL Y DESDE AJAX)[cite: 10]
+// LÓGICA DE BÚSQUEDA PARA EDITAR (PROCESAMIENTO TRADICIONAL Y DESDE AJAX)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_buscar_editar'])) {
     $busqueda = trim($_POST['busqueda_editar']);
     
@@ -213,11 +260,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_buscar_editar'])) 
         $mostrar_modal_editar = true;
     } else {
         $error = "No se encontró ningún usuario con los criterios especificados para su edición.";
-        $mostrar_modal_registro = true; // Volver al panel anterior[cite: 10]
+        $mostrar_modal_registro = true; // Volver al panel anterior
     }
 }
 
-// LÓGICA DE ACTUALIZACIÓN / GUARDAR EDICIÓN[cite: 10]
+// LÓGICA DE ACTUALIZACIÓN / GUARDAR EDICIÓN
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_actualizar_usuario'])) {
     $id_edit         = $_POST['id_editar'];
     $nombre_completo = trim($_POST['nombre_completo']);
@@ -228,7 +275,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_actualizar_usuario
     $area            = trim($_POST['area']);
     $pass1           = $_POST['nueva_password'];
 
-    // Verificar duplicados excluyendo el usuario actual[cite: 10]
+    // Verificar duplicados excluyendo el usuario actual
     $stmt_check = $conexion->prepare("SELECT id FROM usuarios WHERE (usuario = ? OR email = ? OR dni = ?) AND id != ?");
     $stmt_check->bind_param("sssi", $nuevo_user, $email, $dni, $id_edit);
     $stmt_check->execute();
@@ -237,7 +284,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_actualizar_usuario
     if ($res_check->num_rows > 0) {
         $error = "Error de conflicto: Los nuevos datos ingresados pertenecen a otra entidad de la red.";
     } else {
-        // Verificar si se subió una nueva foto en la edición[cite: 10]
+        // Verificar si se subió una nueva foto en la edición
         $nueva_foto = null;
         if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
             $fileTmpPath   = $_FILES['foto_perfil']['tmp_name'];
@@ -257,7 +304,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_actualizar_usuario
 
         $fecha_actual = date('Y-m-d H:i:s');
 
-        // Construcción de consulta dinámica según si cambia password o foto[cite: 10]
+        // Construcción de consulta dinámica según si cambia password o foto
         if (!empty($pass1) && $nueva_foto !== null) {
             $pass_hash = password_hash($pass1, PASSWORD_BCRYPT);
             $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, password=?, rol=?, area=?, foto_perfil=?, ultima_modificacion_pass=? WHERE id=?");
@@ -285,7 +332,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_actualizar_usuario
     }
 }
 
-// 4. LÓGICA DE RECUPERACIÓN (URL DINÁMICA SEGÚN ENTORNO / DOMINIO)[cite: 10]
+// 4. LÓGICA DE RECUPERACIÓN (URL DINÁMICA SEGÚN ENTORNO / DOMINIO)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_recuperar'])) {
     $email_rec = trim($_POST['email_recuperacion']);
     
@@ -312,7 +359,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_recuperar'])) {
     }
 }
 
-// Mini endpoint para la búsqueda interactiva asíncrona de usuarios a dar de baja[cite: 10]
+// Mini endpoint para la búsqueda interactiva asíncrona de usuarios a dar de baja
 if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_baja' && isset($_GET['term'])) {
     ob_clean();
     header('Content-Type: application/json');
@@ -331,7 +378,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_baja' && isset($_G
     exit();
 }
 
-// Mini endpoint para la búsqueda interactiva asíncrona de usuarios a editar/modificar[cite: 10]
+// Mini endpoint para la búsqueda interactiva asíncrona de usuarios a editar/modificar
 if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($_GET['term'])) {
     ob_clean();
     header('Content-Type: application/json');
@@ -573,7 +620,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
             <p class="text-white-50 small text-uppercase fw-light" style="letter-spacing: 2px;">Protocolo de Autenticación</p>
         </div>
 
-        <?php if($error): ?>
+        <?php if($error && !$mostrar_modal_cambio_clave): ?>
             <div class="status-alert alert-danger">
                 <i class="bi bi-exclamation-triangle-fill fs-5"></i> <?php echo $error; ?>
             </div>
@@ -611,6 +658,39 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                 <a href="#" class="text-decoration-none small text-white-50" style="transition:0.3s" onmouseover="this.style.color='#38bdf8'" onmouseout="this.style.color='rgba(255,255,255,0.5)'" data-bs-toggle="modal" data-bs-target="#modalRecuperar">¿Olvidaste tu contraseña?</a>
             </div>
         </form>
+    </div>
+
+    <!-- MODAL DE CAMBIO OBLIGATORIO DE CLAVE CADUCADA -->
+    <div class="modal fade" id="modalClaveExpirada" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background: #0f172a; border: 1px solid #f43f5e; border-radius: 25px; box-shadow: 0 0 40px rgba(244, 63, 94, 0.4);">
+                <div class="modal-body p-5">
+                    <div class="text-center mb-4">
+                        <i class="bi bi-shield-exclamation text-danger" style="font-size: 3.5rem;"></i>
+                        <h4 class="text-white fw-bold mt-2">CLAVE CADUCADA</h4>
+                        <p class="text-white-50 small">Su contraseña ha expirado (30 días de vigencia). Debe actualizarla obligatoriamente para poder ingresar al sistema.</p>
+                    </div>
+
+                    <?php if($error && $mostrar_modal_cambio_clave): ?>
+                        <div class="status-alert alert-danger mb-4">
+                            <i class="bi bi-exclamation-triangle-fill fs-5"></i> <?php echo $error; ?>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <form action="index.php" method="POST">
+                        <div class="mb-3">
+                            <label class="form-label small text-white-50 fw-bold ms-1">NUEVA CONTRASEÑA</label>
+                            <input type="password" name="nueva_password_expirada" class="form-control" placeholder="••••••••" required>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label small text-white-50 fw-bold ms-1">CONFIRMAR NUEVA CONTRASEÑA</label>
+                            <input type="password" name="confirmar_password_expirada" class="form-control" placeholder="••••••••" required>
+                        </div>
+                        <button type="submit" name="btn_cambiar_clave_expirada" class="btn btn-danger w-100 py-3 fw-bold" style="border-radius: 14px; text-transform:uppercase; letter-spacing:1px;">Actualizar e Ingresar</button>
+                    </form>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="modal fade" id="modalFiltroAdmin" tabindex="-1">
@@ -892,6 +972,11 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
         }
 
         document.addEventListener("DOMContentLoaded", function() {
+            <?php if ($mostrar_modal_cambio_clave): ?>
+                var modalClave = new bootstrap.Modal(document.getElementById('modalClaveExpirada'));
+                modalClave.show();
+            <?php endif; ?>
+
             <?php if ($mostrar_modal_registro): ?>
                 var modalRegistro = new bootstrap.Modal(document.getElementById('modalRegistro'));
                 modalRegistro.show();

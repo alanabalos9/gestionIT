@@ -57,11 +57,12 @@ $resultado = $conexion->query($query);
 $res_categorias = $conexion->query("SELECT * FROM categorias ORDER BY nombre ASC");
 $res_cat_modal = $conexion->query("SELECT * FROM categorias ORDER BY nombre ASC");
 
-// Consulta para lista de usuarios (Modal)
-$res_usuarios_modal = $conexion->query("SELECT id, nombre_completo FROM usuarios ORDER BY nombre_completo ASC");
+// CORRECCIÓN CLAVE: Se consulta el campo 'area' en lugar de 'sector'
+$res_usuarios_modal = $conexion->query("SELECT id, nombre_completo, area FROM usuarios ORDER BY nombre_completo ASC");
 $usuarios_opciones = "";
 while($u = $res_usuarios_modal->fetch_assoc()){
-    $usuarios_opciones .= "<option value='{$u['id']}'>{$u['nombre_completo']}</option>";
+    $area_attr = htmlspecialchars($u['area'] ?? '', ENT_QUOTES);
+    $usuarios_opciones .= "<option value='{$u['id']}' data-sector='{$area_attr}'>{$u['nombre_completo']}</option>";
 }
 ?>
 
@@ -235,7 +236,6 @@ while($u = $res_usuarios_modal->fetch_assoc()){
             <a href="tickets_lista.php" class="nav-link-neo"><i class="bi bi-headset"></i> Mesa de Ayuda</a>
             <div class="vr mx-2 opacity-25" style="height: 20px; align-self: center;"></div>
             
-            <!-- Foto de perfil y menú desplegable -->
             <div class="dropdown me-2">
                 <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle" id="userMenuHeader" data-bs-toggle="dropdown" aria-expanded="false">
                     <img src="<?php echo htmlspecialchars($foto_perfil); ?>" alt="Perfil" class="user-avatar me-2">
@@ -323,6 +323,7 @@ while($u = $res_usuarios_modal->fetch_assoc()){
         </div>
     </main>
 
+    <!-- MODAL EDITAR -->
     <div class="modal fade" id="modalEditar" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content shadow-lg">
@@ -335,25 +336,33 @@ while($u = $res_usuarios_modal->fetch_assoc()){
                         <input type="hidden" name="id" id="edit_id">
                         <div class="mb-3">
                             <label class="small text-secondary mb-1">SECTOR</label>
-                            <select name="sector" id="edit_sector" class="form-select form-control-neo">
-                                <option value="">Seleccione un sector</option>
+                            <select name="sector" id="edit_sector" class="form-select form-control-neo select-sector">
+                                <option value="">Sin definir / No aplica</option>
                                 <option value="Administración">Administración</option>
-                                <option value="Finanzas">Finanzas</option>
-                                <option value="Legales">Legales</option>
-                                <option value="Gerencia">Gerencia</option>
-                                <option value="Sistemas">Sistemas</option>
-                                <option value="Operaciones">Operaciones</option>
-                                <option value="Recursos Humanos">Recursos Humanos</option>
-                                <option value="Infraestructura">Infraestructura</option>
+                                <option value="Atención al Cliente">Atención al Cliente</option>
                                 <option value="Contabilidad">Contabilidad</option>
                                 <option value="Data Center">Data Center</option>
-                                <option value="Ventas">Ventas</option>
+                                <option value="Dirección General">Dirección General</option>
+                                <option value="Finanzas">Finanzas</option>
+                                <option value="Gerencia">Gerencia</option>
+                                <option value="Infraestructura">Infraestructura</option>
+                                <option value="Legales">Legales</option>
+                                <option value="Logística TI">Logística TI</option>
+                                <option value="Mesa de Entradas">Mesa de Entradas</option>
+                                <option value="Monitoreo de Red">Monitoreo de Red</option>
+                                <option value="Operaciones">Operaciones</option>
+                                <option value="Operaciones TI">Operaciones TI</option>
                                 <option value="Recepción">Recepción</option>
+                                <option value="Recursos Humanos">Recursos Humanos</option>
+                                <option value="Seguridad Informática">Seguridad Informática</option>
+                                <option value="Sistemas">Sistemas</option>
+                                <option value="Soporte Técnico">Soporte Técnico</option>
+                                <option value="Ventas">Ventas</option>
                             </select>
                         </div>
                         <div class="mb-3">
                             <label class="small text-secondary mb-1">USUARIO ASIGNADO</label>
-                            <select name="usuario_id" id="edit_usuario" class="form-select form-control-neo">
+                            <select name="usuario_id" id="edit_usuario" class="form-select form-control-neo select-usuario">
                                 <option value="">Sin asignar</option>
                                 <?php echo $usuarios_opciones; ?>
                             </select>
@@ -373,6 +382,7 @@ while($u = $res_usuarios_modal->fetch_assoc()){
         </div>
     </div>
 
+    <!-- MODAL NUEVO -->
     <div class="modal fade" id="modalNuevo" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content shadow-lg">
@@ -426,26 +436,34 @@ while($u = $res_usuarios_modal->fetch_assoc()){
 
                             <div class="col-md-6">
                                 <label class="small text-secondary mb-1">SECTOR DEL EQUIPO</label>
-                                <select name="sector" class="form-select form-control-neo">
+                                <select name="sector" id="nuevo_sector" class="form-select form-control-neo select-sector">
                                     <option value="" selected>Sin definir / No aplica</option>
                                     <option value="Administración">Administración</option>
-                                    <option value="Finanzas">Finanzas</option>
-                                    <option value="Legales">Legales</option>
-                                    <option value="Gerencia">Gerencia</option>
-                                    <option value="Sistemas">Sistemas</option>
-                                    <option value="Operaciones">Operaciones</option>
-                                    <option value="Recursos Humanos">Recursos Humanos</option>
-                                    <option value="Infraestructura">Infraestructura</option>
+                                    <option value="Atención al Cliente">Atención al Cliente</option>
                                     <option value="Contabilidad">Contabilidad</option>
                                     <option value="Data Center">Data Center</option>
-                                    <option value="Ventas">Ventas</option>
+                                    <option value="Dirección General">Dirección General</option>
+                                    <option value="Finanzas">Finanzas</option>
+                                    <option value="Gerencia">Gerencia</option>
+                                    <option value="Infraestructura">Infraestructura</option>
+                                    <option value="Legales">Legales</option>
+                                    <option value="Logística TI">Logística TI</option>
+                                    <option value="Mesa de Entradas">Mesa de Entradas</option>
+                                    <option value="Monitoreo de Red">Monitoreo de Red</option>
+                                    <option value="Operaciones">Operaciones</option>
+                                    <option value="Operaciones TI">Operaciones TI</option>
                                     <option value="Recepción">Recepción</option>
+                                    <option value="Recursos Humanos">Recursos Humanos</option>
+                                    <option value="Seguridad Informática">Seguridad Informática</option>
+                                    <option value="Sistemas">Sistemas</option>
+                                    <option value="Soporte Técnico">Soporte Técnico</option>
+                                    <option value="Ventas">Ventas</option>
                                 </select>
                             </div>
 
                             <div class="col-md-6">
                                 <label class="small text-secondary mb-1">USUARIO ASIGNADO</label>
-                                <select name="usuario_id" class="form-select form-control-neo">
+                                <select name="usuario_id" id="nuevo_usuario" class="form-select form-control-neo select-usuario">
                                     <option value="" selected>Sin asignar inicialmente</option>
                                     <?php echo $usuarios_opciones; ?>
                                 </select>
@@ -471,7 +489,10 @@ while($u = $res_usuarios_modal->fetch_assoc()){
         function abrirModalEditar(data) {
             document.getElementById('edit_id').value = data.id;
             document.getElementById('edit_sector').value = data.sector || '';
-            document.getElementById('edit_usuario').value = data.usuario_assigned_id || '';
+            
+            // Filtrar usuarios según el sector cargado en edición
+            filtrarUsuariosPorSector('#modalEditar', data.sector || '', data.usuario_asignado_id || '');
+            
             document.getElementById('edit_estado').value = data.estado || 'Disponible';
             modalEdit.show();
         }
@@ -486,6 +507,76 @@ while($u = $res_usuarios_modal->fetch_assoc()){
         }
         document.getElementById('searchInput').addEventListener('input', filter);
         document.getElementById('categoryFilter').addEventListener('change', filter);
+
+        // FUNCIÓN FILTRADORA: Muestra solo opciones de usuarios que pertenecen al área/sector seleccionado
+        function filtrarUsuariosPorSector(containerSelector, sectorElegido, usuarioASeleccionar = null) {
+            const container = document.querySelector(containerSelector);
+            if (!container) return;
+
+            const selectUsuario = container.querySelector('.select-usuario');
+            const options = Array.from(selectUsuario.options);
+
+            options.forEach(option => {
+                const sectorUsuario = option.dataset.sector;
+                // Opción vacía ("Sin asignar") siempre visible
+                if (!option.value) {
+                    option.hidden = false;
+                    option.disabled = false;
+                } else if (!sectorElegido || sectorUsuario === sectorElegido) {
+                    option.hidden = false;
+                    option.disabled = false;
+                } else {
+                    option.hidden = true;
+                    option.disabled = true;
+                }
+            });
+
+            // Si se mandó preseleccionar un ID de usuario (caso editar)
+            if (usuarioASeleccionar !== null) {
+                selectUsuario.value = usuarioASeleccionar;
+            } else {
+                // Si la selección actual fue ocultada, reiniciar a la primera opción ("Sin asignar")
+                const selectedOption = selectUsuario.options[selectUsuario.selectedIndex];
+                if (selectedOption && selectedOption.disabled) {
+                    selectUsuario.value = "";
+                }
+            }
+        }
+
+        // ASIGNACIÓN DE EVENTOS DE VINCULACIÓN
+        function inicializarVinculacion(containerSelector) {
+            const container = document.querySelector(containerSelector);
+            if (!container) return;
+
+            const selectSector = container.querySelector('.select-sector');
+            const selectUsuario = container.querySelector('.select-usuario');
+
+            // 1. Al cambiar Sector -> Mostrar solo los usuarios del sector/área elegida
+            selectSector.addEventListener('change', function () {
+                filtrarUsuariosPorSector(containerSelector, this.value);
+            });
+
+            // 2. Al cambiar Usuario -> Autoseleccionar su sector/área
+            selectUsuario.addEventListener('change', function () {
+                const optionSelected = this.options[this.selectedIndex];
+                const sectorDelUsuario = optionSelected.dataset.sector;
+
+                if (sectorDelUsuario) {
+                    selectSector.value = sectorDelUsuario;
+                    filtrarUsuariosPorSector(containerSelector, sectorDelUsuario, this.value);
+                }
+            });
+        }
+
+        // Inicialización de la vinculación
+        inicializarVinculacion('#modalEditar');
+        inicializarVinculacion('#modalNuevo');
+
+        // Resetear modal Nuevo cuando se abra
+        document.getElementById('modalNuevo').addEventListener('show.bs.modal', function () {
+            document.getElementById('formNuevoEquipo').reset();
+            filtrarUsuariosPorSector('#modalNuevo', '');
+        });
 
         // Envío Editar
         document.getElementById('formUpdateInventario').onsubmit = function(e) {

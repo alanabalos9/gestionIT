@@ -365,7 +365,9 @@ if($deptos_res) {
                     'asunto' => $row['asunto'],
                     'descripcion' => $row['descripcion'],
                     'prioridad' => $row['prioridad'],
+                    'estado' => $row['estado'],
                     'tipo' => $row['tipo'],
+                    'detalle_resolucion' => $row['detalle_resolucion'] ?? '',
                     'adjunto' => !empty($row['archivo_adjunto']) ? true : false,
                     'archivo_nombre' => $row['archivo_nombre'] ?? '',
                     'archivo_tipo' => $row['archivo_tipo'] ?? ''
@@ -410,7 +412,7 @@ if($deptos_res) {
                     <div class="btn-action-group">
                         <div onclick="asignarTicket(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-person-plus text-info"></i><span>Asignar</span></div>
                         <div onclick="extenderTiempo(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-clock-history text-primary"></i><span>+Tiempo</span></div>
-                        <div onclick="resolverTicket(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-check2-circle text-success"></i><span>Estado</span></div>
+                        <div onclick="resolverTicket(<?php echo $row['id']; ?>, '<?php echo htmlspecialchars($row['estado'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes($row['detalle_resolucion'] ?? ''), ENT_QUOTES); ?>')" class="btn-action-card"><i class="bi bi-check2-circle text-success"></i><span>Estado</span></div>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -420,7 +422,7 @@ if($deptos_res) {
     </div>
 
     <div class="modal fade" id="modalDetalle" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content" style="background: rgba(22, 28, 45, 0.95); backdrop-filter: blur(15px); border-radius: 20px; border: 1px solid rgba(56, 189, 248, 0.25); box-shadow: 0 0 25px rgba(56, 189, 248, 0.15);">
                 <div id="modalContent"></div>
             </div>
@@ -525,6 +527,23 @@ if($deptos_res) {
                 }
             }
 
+            // Visualización del Comentario/Detalle de Resolución Registrado
+            let detalleResolucionHtml = '';
+            if (ticket.detalle_resolucion && ticket.detalle_resolucion.trim() !== '') {
+                detalleResolucionHtml = `
+                    <div class="mb-3 p-3 rounded-3" style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25);">
+                        <label class="form-label small fw-bold text-info text-uppercase mb-1">
+                            <i class="bi bi-chat-left-text me-1"></i> Comentario / Detalles de Resolución
+                        </label>
+                        <p class="mb-0 text-white" style="font-size: 0.9rem; white-space: pre-wrap;">${ticket.detalle_resolucion}</p>
+                    </div>`;
+            } else {
+                detalleResolucionHtml = `
+                    <div class="mb-3 p-3 rounded-3" style="background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.1);">
+                        <span class="small text-muted"><i class="bi bi-info-circle me-1"></i> No se han registrado comentarios o observaciones sobre el estado.</span>
+                    </div>`;
+            }
+
             const htmlModal = `
                 <div class="modal-header border-bottom-0 pb-0" style="padding: 25px 25px 0 25px;">
                     <h5 class="modal-title fw-bold text-white" style="font-family: 'Orbitron'; font-size: 1.1rem; letter-spacing:1px;">GESTIONAR TICKET #${ticket.id}</h5>
@@ -534,6 +553,8 @@ if($deptos_res) {
                     <form id="formEditarTicketBase" onsubmit="event.preventDefault(); guardarCambiosTicketBase();">
                         <input type="hidden" name="id" value="${ticket.id}">
                         <input type="hidden" name="accion" value="editar_basico">
+
+                        ${detalleResolucionHtml}
                         
                         <div class="mb-3">
                             <label class="form-label small fw-bold text-secondary text-uppercase">Archivo Adjunto Cargado</label>
@@ -642,19 +663,19 @@ if($deptos_res) {
             if (tId) enviarAccion({ id, tecnico_id: tId, accion: 'asignar' });
         }
 
-        async function resolverTicket(id) {
+        async function resolverTicket(id, estadoActual = 'En curso', detallePrevio = '') {
             const { value: f } = await Swal.fire({
                 title: 'CAMBIAR ESTADO DEL TICKET',
                 customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' },
                 html: `
                     <label class="small text-secondary d-block text-start mb-1 fw-bold">Seleccionar Estado</label>
                     <select id="s-est" class="neo-swal-select w-100 mb-3">
-                        <option value="En curso">En curso</option>
-                        <option value="Resuelto">Resuelto</option>
-                        <option value="Cerrado">Cerrado</option>
+                        <option value="En curso" ${estadoActual === 'En curso' ? 'selected' : ''}>En curso</option>
+                        <option value="Resuelto" ${estadoActual === 'Resuelto' ? 'selected' : ''}>Resuelto</option>
+                        <option value="Cerrado" ${estadoActual === 'Cerrado' ? 'selected' : ''}>Cerrado</option>
                     </select>
                     <label class="small text-secondary d-block text-start mb-1 fw-bold">Comentarios / Detalles de la resolución</label>
-                    <textarea id="s-det" class="neo-swal-textarea w-100" style="height:100px;" placeholder="Escriba los detalles aquí..."></textarea>
+                    <textarea id="s-det" class="neo-swal-textarea w-100" style="height:100px;" placeholder="Escriba los detalles aquí...">${detallePrevio}</textarea>
                 `,
                 showCancelButton: true,
                 confirmButtonColor: '#10b981',
