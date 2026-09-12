@@ -23,6 +23,20 @@ $usuario_a_editar = null;
 $mostrar_modal_cambio_clave = false;
 
 /**
+ * Función auxiliar para validar la fortaleza de la contraseña en el backend PHP
+ * Reglas:
+ * - Entre 8 y 16 caracteres
+ * - Al menos una mayúscula (?=.*[A-Z])
+ * - Al menos una minúscula / cursiva (?=.*[a-z])
+ * - Al menos un número (?=.*\d)
+ * - Al menos un carácter especial (?=.*[\W_])
+ */
+function validarFormatoPassword($password) {
+    $patron = '/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$/';
+    return preg_match($patron, $password);
+}
+
+/**
  * Función auxiliar para configurar y enviar correos
  */
 function enviarCorreo($destinatario, $asunto, $cuerpo, $replyTo = null) {
@@ -162,6 +176,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_cambiar_clave_expi
     } elseif ($pass1 !== $pass2) {
         $error = "Las contraseñas no coinciden. Intente nuevamente.";
         $mostrar_modal_cambio_clave = true;
+    } elseif (!validarFormatoPassword($pass1)) {
+        $error = "La contraseña debe tener de 8 a 16 caracteres, incluir al menos una mayúscula, una minúscula, un número y un carácter especial.";
+        $mostrar_modal_cambio_clave = true;
     } else {
         $pass_hash = password_hash($pass1, PASSWORD_BCRYPT);
         $fecha_actual = date('Y-m-d H:i:s');
@@ -224,45 +241,50 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'
     $area            = trim($_POST['area']);
     $pass1           = $_POST['nueva_password'];
 
-    // Procesamiento de foto de perfil
-    $nombre_foto = 'default.png';
-    if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
-        $fileTmpPath   = $_FILES['foto_perfil']['tmp_name'];
-        $fileName      = $_FILES['foto_perfil']['name'];
-        $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-        $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
-
-        if (in_array($fileExtension, $allowedExtensions)) {
-            $nombre_foto = 'user_' . time() . '_' . uniqid() . '.' . $fileExtension;
-            $uploadFileDir = 'img/';
-            if (!is_dir($uploadFileDir)) {
-                mkdir($uploadFileDir, 0755, true);
-            }
-            move_uploaded_file($fileTmpPath, $uploadFileDir . $nombre_foto);
-        }
-    }
-
-    // Verificar duplicados (Usuario, Email o DNI)
-    $stmt_check = $conexion->prepare("SELECT id FROM usuarios WHERE usuario = ? OR email = ? OR dni = ?");
-    $stmt_check->bind_param("sss", $nuevo_user, $email, $dni);
-    $stmt_check->execute();
-    $res_check = $stmt_check->get_result();
-
-    if ($res_check->num_rows > 0) {
-        $error = "Error de protocolo: El identificador, correo o DNI ya se encuentra asignado a otra cuenta.";
+    if (!validarFormatoPassword($pass1)) {
+        $error = "Error de complejidad: La clave debe tener entre 8 y 16 caracteres, incluir al menos una mayúscula, una minúscula, un número y un carácter especial.";
         $mostrar_modal_registro = true;
     } else {
-        $pass_hash = password_hash($pass1, PASSWORD_BCRYPT);
-        $fecha_actual = date('Y-m-d H:i:s');
+        // Procesamiento de foto de perfil
+        $nombre_foto = 'default.png';
+        if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
+            $fileTmpPath   = $_FILES['foto_perfil']['tmp_name'];
+            $fileName      = $_FILES['foto_perfil']['name'];
+            $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+            $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
 
-        $stmt_ins = $conexion->prepare("INSERT INTO usuarios (nombre_completo, usuario, email, dni, password, rol, area, foto_perfil, ultima_modificacion_pass) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt_ins->bind_param("sssssssss", $nombre_completo, $nuevo_user, $email, $dni, $pass_hash, $rol, $area, $nombre_foto, $fecha_actual);
+            if (in_array($fileExtension, $allowedExtensions)) {
+                $nombre_foto = 'user_' . time() . '_' . uniqid() . '.' . $fileExtension;
+                $uploadFileDir = 'img/';
+                if (!is_dir($uploadFileDir)) {
+                    mkdir($uploadFileDir, 0755, true);
+                }
+                move_uploaded_file($fileTmpPath, $uploadFileDir . $nombre_foto);
+            }
+        }
 
-        if ($stmt_ins->execute()) {
-            $success = "Ficha de usuario e identidad sincronizadas con éxito en el sistema.";
-        } else {
-            $error = "Error de sistema: No se pudo escribir en el registro de credenciales.";
+        // Verificar duplicados (Usuario, Email o DNI)
+        $stmt_check = $conexion->prepare("SELECT id FROM usuarios WHERE usuario = ? OR email = ? OR dni = ?");
+        $stmt_check->bind_param("sss", $nuevo_user, $email, $dni);
+        $stmt_check->execute();
+        $res_check = $stmt_check->get_result();
+
+        if ($res_check->num_rows > 0) {
+            $error = "Error de protocolo: El identificador, correo o DNI ya se encuentra asignado a otra cuenta.";
             $mostrar_modal_registro = true;
+        } else {
+            $pass_hash = password_hash($pass1, PASSWORD_BCRYPT);
+            $fecha_actual = date('Y-m-d H:i:s');
+
+            $stmt_ins = $conexion->prepare("INSERT INTO usuarios (nombre_completo, usuario, email, dni, password, rol, area, foto_perfil, ultima_modificacion_pass) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt_ins->bind_param("sssssssss", $nombre_completo, $nuevo_user, $email, $dni, $pass_hash, $rol, $area, $nombre_foto, $fecha_actual);
+
+            if ($stmt_ins->execute()) {
+                $success = "Ficha de usuario e identidad sincronizadas con éxito en el sistema.";
+            } else {
+                $error = "Error de sistema: No se pudo escribir en el registro de credenciales.";
+                $mostrar_modal_registro = true;
+            }
         }
     }
 }
@@ -311,59 +333,70 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_actualizar_usuario
     $area            = trim($_POST['area']);
     $pass1           = $_POST['nueva_password'];
 
-    // Verificar duplicados excluyendo el usuario actual
-    $stmt_check = $conexion->prepare("SELECT id FROM usuarios WHERE (usuario = ? OR email = ? OR dni = ?) AND id != ?");
-    $stmt_check->bind_param("sssi", $nuevo_user, $email, $dni, $id_edit);
-    $stmt_check->execute();
-    $res_check = $stmt_check->get_result();
-
-    if ($res_check->num_rows > 0) {
-        $error = "Error de conflicto: Los nuevos datos ingresados pertenecen a otra entidad de la red.";
+    // Si se especificó una nueva contraseña en edición, debe cumplir las reglas
+    if (!empty($pass1) && !validarFormatoPassword($pass1)) {
+        $error = "Error de complejidad: La nueva clave debe tener entre 8 y 16 caracteres, incluir al menos una mayúscula, una minúscula, un número y un carácter especial.";
+        $mostrar_modal_editar = true;
+        // Volver a cargar los datos del usuario para mostrar modal correctamente
+        $stmt_reload = $conexion->prepare("SELECT * FROM usuarios WHERE id = ?");
+        $stmt_reload->bind_param("i", $id_edit);
+        $stmt_reload->execute();
+        $usuario_a_editar = $stmt_reload->get_result()->fetch_assoc();
     } else {
-        // Verificar si se subió una nueva foto en la edición
-        $nueva_foto = null;
-        if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
-            $fileTmpPath   = $_FILES['foto_perfil']['tmp_name'];
-            $fileName      = $_FILES['foto_perfil']['name'];
-            $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-            $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+        // Verificar duplicados excluyendo el usuario actual
+        $stmt_check = $conexion->prepare("SELECT id FROM usuarios WHERE (usuario = ? OR email = ? OR dni = ?) AND id != ?");
+        $stmt_check->bind_param("sssi", $nuevo_user, $email, $dni, $id_edit);
+        $stmt_check->execute();
+        $res_check = $stmt_check->get_result();
 
-            if (in_array($fileExtension, $allowedExtensions)) {
-                $nueva_foto = 'user_' . time() . '_' . uniqid() . '.' . $fileExtension;
-                $uploadFileDir = 'img/';
-                if (!is_dir($uploadFileDir)) {
-                    mkdir($uploadFileDir, 0755, true);
+        if ($res_check->num_rows > 0) {
+            $error = "Error de conflicto: Los nuevos datos ingresados pertenecen a otra entidad de la red.";
+        } else {
+            // Verificar si se subió una nueva foto en la edición
+            $nueva_foto = null;
+            if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
+                $fileTmpPath   = $_FILES['foto_perfil']['tmp_name'];
+                $fileName      = $_FILES['foto_perfil']['name'];
+                $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+                $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+
+                if (in_array($fileExtension, $allowedExtensions)) {
+                    $nueva_foto = 'user_' . time() . '_' . uniqid() . '.' . $fileExtension;
+                    $uploadFileDir = 'img/';
+                    if (!is_dir($uploadFileDir)) {
+                        mkdir($uploadFileDir, 0755, true);
+                    }
+                    move_uploaded_file($fileTmpPath, $uploadFileDir . $nueva_foto);
                 }
-                move_uploaded_file($fileTmpPath, $uploadFileDir . $nueva_foto);
             }
-        }
 
-        $fecha_actual = date('Y-m-d H:i:s');
+            $fecha_actual = date('Y-m-d H:i:s');
 
-        // Construcción de consulta dinámica según si cambia password o foto
-        if (!empty($pass1) && $nueva_foto !== null) {
-            $pass_hash = password_hash($pass1, PASSWORD_BCRYPT);
-            $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, password=?, rol=?, area=?, foto_perfil=?, ultima_modificacion_pass=? WHERE id=?");
-            $stmt_upd->bind_param("sssssssssi", $nombre_completo, $nuevo_user, $email, $dni, $pass_hash, $rol, $area, $nueva_foto, $fecha_actual, $id_edit);
-        } else if (!empty($pass1)) {
-            $pass_hash = password_hash($pass1, PASSWORD_BCRYPT);
-            $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, password=?, rol=?, area=?, ultima_modificacion_pass=? WHERE id=?");
-            $stmt_upd->bind_param("ssssssssi", $nombre_completo, $nuevo_user, $email, $dni, $pass_hash, $rol, $area, $fecha_actual, $id_edit);
-        } else if ($nueva_foto !== null) {
-            $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, rol=?, area=?, foto_perfil=? WHERE id=?");
-            $stmt_upd->bind_param("sssssssi", $nombre_completo, $nuevo_user, $email, $dni, $rol, $area, $nueva_foto, $id_edit);
-        } else {
-            $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, rol=?, area=? WHERE id=?");
-            $stmt_upd->bind_param("ssssssi", $nombre_completo, $nuevo_user, $email, $dni, $rol, $area, $id_edit);
-        }
-
-        if ($stmt_upd->execute()) {
-            if (isset($_SESSION['usuario_id']) && $_SESSION['usuario_id'] == $id_edit && $nueva_foto !== null) {
-                $_SESSION['foto_perfil'] = $nueva_foto;
+            // Construcción de consulta dinámica según si cambia password o foto
+            if (!empty($pass1) && $nueva_foto !== null) {
+                $pass_hash = password_hash($pass1, PASSWORD_BCRYPT);
+                $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, password=?, rol=?, area=?, foto_perfil=?, ultima_modificacion_pass=? WHERE id=?");
+                $stmt_upd->bind_param("sssssssssi", $nombre_completo, $nuevo_user, $email, $dni, $pass_hash, $rol, $area, $nueva_foto, $fecha_actual, $id_edit);
+            } else if (!empty($pass1)) {
+                $pass_hash = password_hash($pass1, PASSWORD_BCRYPT);
+                $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, password=?, rol=?, area=?, ultima_modificacion_pass=? WHERE id=?");
+                $stmt_upd->bind_param("ssssssssi", $nombre_completo, $nuevo_user, $email, $dni, $pass_hash, $rol, $area, $fecha_actual, $id_edit);
+            } else if ($nueva_foto !== null) {
+                $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, rol=?, area=?, foto_perfil=? WHERE id=?");
+                $stmt_upd->bind_param("sssssssi", $nombre_completo, $nuevo_user, $email, $dni, $rol, $area, $nueva_foto, $id_edit);
+            } else {
+                $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, rol=?, area=? WHERE id=?");
+                $stmt_upd->bind_param("ssssssi", $nombre_completo, $nuevo_user, $email, $dni, $rol, $area, $id_edit);
             }
-            $success = "La ficha de identidad y privilegios del usuario han sido actualizados con éxito.";
-        } else {
-            $error = "Error de sistema: Fallo al reescribir la matriz de datos.";
+
+            if ($stmt_upd->execute()) {
+                if (isset($_SESSION['usuario_id']) && $_SESSION['usuario_id'] == $id_edit && $nueva_foto !== null) {
+                    $_SESSION['foto_perfil'] = $nueva_foto;
+                }
+                $success = "La ficha de identidad y privilegios del usuario han sido actualizados con éxito.";
+            } else {
+                $error = "Error de sistema: Fallo al reescribir la matriz de datos.";
+            }
         }
     }
 }
@@ -712,10 +745,10 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                         </div>
                     <?php endif; ?>
                     
-                    <form action="index.php" method="POST">
+                    <form action="index.php" method="POST" onsubmit="return validarPasswordFront(this.nueva_password_expirada.value)">
                         <div class="mb-3">
                             <label class="form-label small text-white-50 fw-bold ms-1">NUEVA CONTRASEÑA</label>
-                            <input type="password" name="nueva_password_expirada" class="form-control" placeholder="••••••••" required>
+                            <input type="password" name="nueva_password_expirada" class="form-control" placeholder="••••••••" required pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$" title="Debe contener entre 8 y 16 caracteres, al menos una mayúscula, una minúscula, un número y un carácter especial.">
                         </div>
                         <div class="mb-4">
                             <label class="form-label small text-white-50 fw-bold ms-1">CONFIRMAR NUEVA CONTRASEÑA</label>
@@ -774,7 +807,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                         <p class="text-white-50 small">Complete los campos de identidad solicitados para el registro en la infraestructura.</p>
                     </div>
                     
-                    <form action="index.php" method="POST" enctype="multipart/form-data">
+                    <form action="index.php" method="POST" enctype="multipart/form-data" onsubmit="return validarPasswordFront(this.nueva_password.value)">
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label small text-white-50 fw-bold">NOMBRE Y APELLIDO completo</label>
@@ -806,7 +839,8 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                             </div>
                             <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">CONTRASEÑA ASIGNADA</label>
-                                <input type="password" name="nueva_password" class="form-control" placeholder="••••••••" required>
+                                <input type="password" name="nueva_password" class="form-control" placeholder="••••••••" required pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$" title="Debe tener entre 8 y 16 caracteres, al menos una mayúscula, una minúscula, un número y un carácter especial.">
+                                <small class="text-white-50" style="font-size: 0.72rem;">Min. 8-16 caps, 1 mayúscula, 1 minúscula, 1 número y 1 especial.</small>
                             </div>
                             <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">FOTO DE PERFIL (OPCIONAL)</label>
@@ -906,7 +940,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                         <p class="text-white-50 small">Modifique los campos correspondientes. Deje la contraseña en blanco si prefiere conservar la actual.</p>
                     </div>
                     
-                    <form action="index.php" method="POST" enctype="multipart/form-data">
+                    <form action="index.php" method="POST" enctype="multipart/form-data" onsubmit="return (this.nueva_password.value === '' || validarPasswordFront(this.nueva_password.value))">
                         <input type="hidden" name="id_editar" value="<?php echo $usuario_a_editar['id']; ?>">
                         <div class="row">
                             <div class="col-md-6 mb-3">
@@ -939,7 +973,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                             </div>
                             <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">ASIGNAR NUEVA CONTRASEÑA (OPCIONAL)</label>
-                                <input type="password" name="nueva_password" class="form-control" placeholder="Dejar en blanco para no modificar">
+                                <input type="password" name="nueva_password" class="form-control" placeholder="Dejar en blanco para no modificar" pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$" title="Debe tener entre 8 y 16 caracteres, al menos una mayúscula, una minúscula, un número y un carácter especial.">
                             </div>
                             <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">CAMBIAR FOTO DE PERFIL (OPCIONAL)</label>
@@ -1015,6 +1049,15 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        function validarPasswordFront(password) {
+            const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$/;
+            if (!regex.test(password)) {
+                alert("La contraseña debe tener de 8 a 16 caracteres e incluir al menos:\n- Una letra mayúscula\n- Una letra minúscula\n- Un número\n- Un carácter especial (!@#$%^&* y similares)");
+                return false;
+            }
+            return true;
+        }
+
         function toggleBot() {
             const bot = document.getElementById('chatBot');
             if(bot.style.display === 'block') {
