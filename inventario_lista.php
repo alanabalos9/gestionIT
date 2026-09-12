@@ -3,8 +3,9 @@ session_start();
 require_once 'db.php'; 
 
 /**
- * CONTROL DE ACCESO
- * Verifica que el usuario esté logueado y tenga permisos suficientes.
+ * CONTROL DE ACCESO STRICTO
+ * Permite acceso únicamente a roles 'administrador' y 'tecnico'.
+ * Si el rol no está autorizado, renderiza la pantalla "ACCESO DENEGADO".
  */
 if (!isset($_SESSION['rol'])) {
     header("Location: login.php");
@@ -12,13 +13,127 @@ if (!isset($_SESSION['rol'])) {
 }
 
 $rol = $_SESSION['rol'];
-$mostrar_alerta_permiso = false;
+$roles_permitidos = ['administrador', 'tecnico'];
 
-if ($rol === 'operativo') {
-    $mostrar_alerta_permiso = true;
-} 
-elseif ($rol !== 'administrador' && $rol !== 'tecnico') {
-    header("Location: dashboard.php"); 
+if (!in_array($rol, $roles_permitidos)) {
+?>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso Denegado | NeoAdmin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0b0f19;
+            --card-bg: #151c2c;
+            --red-border: #f87171;
+            --red-btn: #ef4444;
+            --red-btn-hover: #dc2626;
+            --text-muted: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            font-family: 'Inter', sans-serif;
+            color: #ffffff;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .access-card {
+            background-color: var(--card-bg);
+            border: 1px solid rgba(248, 113, 113, 0.3);
+            box-shadow: 0 0 25px rgba(239, 68, 68, 0.15);
+            border-radius: 16px;
+            padding: 40px 30px;
+            width: 100%;
+            max-width: 440px;
+            text-align: center;
+        }
+
+        .icon-wrapper {
+            width: 70px;
+            height: 70px;
+            border: 2px solid var(--red-border);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px auto;
+        }
+
+        .icon-wrapper svg {
+            width: 32px;
+            height: 32px;
+            stroke: var(--red-border);
+            stroke-width: 2.5;
+        }
+
+        .title {
+            font-family: 'Orbitron', sans-serif;
+            color: var(--red-border);
+            font-size: 1.25rem;
+            letter-spacing: 1.5px;
+            margin-bottom: 12px;
+        }
+
+        .message {
+            color: #e2e8f0;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            margin-bottom: 25px;
+        }
+
+        .btn-action {
+            display: inline-block;
+            background-color: var(--red-btn);
+            color: #ffffff;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            padding: 10px 32px;
+            border-radius: 8px;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+        }
+
+        .btn-action:hover {
+            background-color: var(--red-btn-hover);
+        }
+
+        .btn-action:active {
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="access-card">
+        <div class="icon-wrapper">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </div>
+        
+        <h2 class="title">ACCESO DENEGADO</h2>
+        
+        <p class="message">No tienes los permisos requeridos para ingresar a este panel.</p>
+        
+        <a href="dashboard.php" class="btn-action">Entendido</a>
+    </div>
+
+</body>
+</html>
+<?php
     exit();
 }
 
@@ -239,7 +354,7 @@ while($u = $res_usuarios_modal->fetch_assoc()){
         <div class="d-flex align-items-center gap-2">
             <a href="dashboard.php" class="nav-link-neo"><i class="bi bi-house-door-fill"></i> Inicio</a>
             <a href="tickets_lista.php" class="nav-link-neo"><i class="bi bi-headset"></i> Mesa de Ayuda</a>
-			<a href="bc_lista.php" class="nav-link-neo"><i class="bi bi-journal-text"></i> Base de Conocimiento</a>
+            <a href="bc_lista.php" class="nav-link-neo"><i class="bi bi-journal-text"></i> Base de Conocimiento</a>
             <div class="vr mx-2 opacity-25" style="height: 20px; align-self: center;"></div>
             
             <div class="dropdown me-2">

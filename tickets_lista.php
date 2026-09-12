@@ -2,7 +2,7 @@
 session_start();
 require_once 'db.php';
 
-// Redirigir si no hay sesión iniciada
+// 1. Redirigir si no hay sesión iniciada
 if (!isset($_SESSION['usuario'])) {
     header("Location: index.php");
     exit();
@@ -10,6 +10,48 @@ if (!isset($_SESSION['usuario'])) {
 
 $usuario_id = $_SESSION['usuario_id'];
 $rol = $_SESSION['rol'];
+
+// 2. RESTRICCIÓN DE ACCESO: Si NO es administrador NI técnico, denegar acceso con SweetAlert
+if ($rol !== 'administrador' && $rol !== 'tecnico') {
+    ?>
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Acceso Denegado - NeoAdmin</title>
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+        <style>
+            body { background-color: #0b0f1a; font-family: 'Inter', sans-serif; }
+            .neo-swal-popup { background: rgba(22, 28, 45, 0.98) !important; backdrop-filter: blur(15px); border: 1px solid rgba(239, 68, 68, 0.4) !important; border-radius: 20px !important; color: #f8fafc !important; }
+            .neo-swal-title { font-family: 'Orbitron', sans-serif !important; font-weight: bold !important; color: #ef4444 !important; font-size: 1.3rem !important; }
+        </style>
+    </head>
+    <body>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'ACCESO DENEGADO',
+                    text: 'No tienes los permisos requeridos para ingresar a este panel.',
+                    confirmButtonText: 'Entendido',
+                    confirmButtonColor: '#ef4444',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location.href = 'dashboard.php';
+                    }
+                });
+            });
+        </script>
+    </body>
+    </html>
+    <?php
+    exit();
+}
 
 // OBTENER FOTO DE PERFIL DEL USUARIO
 $usuario_actual = $_SESSION['usuario'] ?? '';
@@ -52,9 +94,6 @@ $query_stats = "SELECT
     SUM(CASE WHEN estado = 'Cerrado' THEN 1 ELSE 0 END) as cerrados
     FROM tickets WHERE 1=1";
 
-if ($rol != 'administrador' && $rol != 'tecnico') {
-    $query_stats .= " AND solicitante_id = $usuario_id";
-}
 if (!empty($filtro_fecha_desde)) {
     $query_stats .= " AND DATE(fecha_creacion) >= '" . $conexion->real_escape_string($filtro_fecha_desde) . "'";
 }
@@ -66,15 +105,13 @@ $stats_res = $conexion->query($query_stats);
 $stats = $stats_res->fetch_assoc();
 
 // --- 2. CONSULTA PARA DATOS DE DIAGRAMAS/GRÁFICOS (MES, HISTÓRICO Y ANUAL) ---
-$user_condition = ($rol != 'administrador' && $rol != 'tecnico') ? " AND solicitante_id = $usuario_id" : "";
-
 // Estadísticas Mes Actual
-$q_mes = $conexion->query("SELECT estado, COUNT(*) as cant FROM tickets WHERE MONTH(fecha_creacion) = MONTH(CURRENT_DATE()) AND YEAR(fecha_creacion) = YEAR(CURRENT_DATE()) $user_condition GROUP BY estado");
+$q_mes = $conexion->query("SELECT estado, COUNT(*) as cant FROM tickets WHERE MONTH(fecha_creacion) = MONTH(CURRENT_DATE()) AND YEAR(fecha_creacion) = YEAR(CURRENT_DATE()) GROUP BY estado");
 $chart_mes = ['Nuevo' => 0, 'En curso' => 0, 'Resuelto' => 0, 'Cerrado' => 0];
 while($r = $q_mes->fetch_assoc()) { if(isset($chart_mes[$r['estado']])) $chart_mes[$r['estado']] = (int)$r['cant']; }
 
 // Estadísticas Año Actual
-$q_anio = $conexion->query("SELECT estado, COUNT(*) as cant FROM tickets WHERE YEAR(fecha_creacion) = YEAR(CURRENT_DATE()) $user_condition GROUP BY estado");
+$q_anio = $conexion->query("SELECT estado, COUNT(*) as cant FROM tickets WHERE YEAR(fecha_creacion) = YEAR(CURRENT_DATE()) GROUP BY estado");
 $chart_anio = ['Nuevo' => 0, 'En curso' => 0, 'Resuelto' => 0, 'Cerrado' => 0];
 while($r = $q_anio->fetch_assoc()) { if(isset($chart_anio[$r['estado']])) $chart_anio[$r['estado']] = (int)$r['cant']; }
 
@@ -82,7 +119,7 @@ while($r = $q_anio->fetch_assoc()) { if(isset($chart_anio[$r['estado']])) $chart
 $q_hist = $conexion->query("SELECT DATE_FORMAT(fecha_creacion, '%Y-%m') as mes_key, DATE_FORMAT(fecha_creacion, '%b %Y') as mes_nombre, COUNT(*) as total,
     SUM(CASE WHEN estado IN ('Resuelto', 'Cerrado') THEN 1 ELSE 0 END) as resueltos,
     SUM(CASE WHEN estado IN ('Nuevo', 'En curso') THEN 1 ELSE 0 END) as pendientes
-    FROM tickets WHERE fecha_creacion >= DATE_SUB(NOW(), INTERVAL 6 MONTH) $user_condition
+    FROM tickets WHERE fecha_creacion >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
     GROUP BY mes_key ORDER BY mes_key ASC");
 
 $chart_hist_labels = [];
@@ -96,24 +133,14 @@ while($r = $q_hist->fetch_assoc()) {
 }
 
 // --- 3. CONSULTA DE TICKETS CON FILTROS DINÁMICOS ---
-if ($rol == 'administrador' || $rol == 'tecnico') {
-    $sql = "SELECT t.id, t.asunto, t.descripcion, t.prioridad, t.estado, t.tipo, t.fecha_creacion, t.fecha_limite,
-                  t.fecha_mantenimiento, t.detalle_resolucion, t.archivo_adjunto, t.archivo_nombre, t.archivo_tipo,
-                  u_sol.nombre_completo AS solicitante_nombre, u_sol.area AS solicitante_depto, 
-                  u_tec.nombre_completo AS tecnico_nombre, t.tecnico_id
-           FROM tickets t
-           JOIN usuarios u_sol ON t.solicitante_id = u_sol.id
-           LEFT JOIN usuarios u_tec ON t.tecnico_id = u_tec.id 
-           WHERE 1=1";
-} else {
-    $sql = "SELECT t.id, t.asunto, t.descripcion, t.prioridad, t.estado, t.tipo, t.fecha_creacion, t.fecha_limite,
-                  t.fecha_mantenimiento, t.detalle_resolucion, t.archivo_adjunto, t.archivo_nombre, t.archivo_tipo,
-                  u_sol.nombre_completo AS solicitante_nombre, u_sol.area AS solicitante_depto,
-                  'N/A' as tecnico_nombre, t.tecnico_id
-           FROM tickets t
-           JOIN usuarios u_sol ON t.solicitante_id = u_sol.id
-           WHERE t.solicitante_id = $usuario_id";
-}
+$sql = "SELECT t.id, t.asunto, t.descripcion, t.prioridad, t.estado, t.tipo, t.fecha_creacion, t.fecha_limite,
+              t.fecha_mantenimiento, t.detalle_resolucion, t.archivo_adjunto, t.archivo_nombre, t.archivo_tipo,
+              u_sol.nombre_completo AS solicitante_nombre, u_sol.area AS solicitante_depto, 
+              u_tec.nombre_completo AS tecnico_nombre, t.tecnico_id
+       FROM tickets t
+       JOIN usuarios u_sol ON t.solicitante_id = u_sol.id
+       LEFT JOIN usuarios u_tec ON t.tecnico_id = u_tec.id 
+       WHERE 1=1";
 
 if (!empty($filtro_estado)) {
     $sql .= " AND t.estado = '" . $conexion->real_escape_string($filtro_estado) . "'";
@@ -191,7 +218,6 @@ if($deptos_res) {
         .card-stat { background: var(--card-bg); border-radius: 15px; border: 1px solid rgba(255,255,255,0.05); padding: 15px; text-align: center; text-decoration: none; display: block; transition: 0.2s; }
         .card-stat:hover { border-color: var(--accent); transform: translateY(-2px); }
         .card-stat h6 { font-family: 'Orbitron'; font-weight: bold; font-size: 1.4rem; margin: 0; }
-        /* CORRECCIÓN VISUAL DE TEXTO DE MÉTRICAS */
         .card-stat-title { color: #cbd5e1 !important; font-size: 0.75rem; font-weight: 700; letter-spacing: 1px; display: block; margin-bottom: 4px; }
         
         .card-ticket { background: var(--card-bg); border-radius: 20px; border: 1px solid rgba(255,255,255,0.05); padding: 1.5rem; height: 100%; transition: all 0.3s ease; position: relative; border-left: 5px solid transparent; }
@@ -340,7 +366,6 @@ if($deptos_res) {
                     <input type="date" name="fecha_hasta" class="form-control form-control-neo py-2" value="<?php echo htmlspecialchars($filtro_fecha_hasta); ?>">
                 </div>
 
-                <?php if ($rol == 'administrador' || $rol == 'tecnico'): ?>
                 <div class="col-md-3">
                     <span class="label-date-neo">Técnico Asignado</span>
                     <select name="tecnico_id" class="form-select form-select-neo">
@@ -350,7 +375,6 @@ if($deptos_res) {
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <?php endif; ?>
 
                 <div class="col-md d-flex gap-2">
                     <button type="submit" class="btn btn-info w-100 fw-bold" style="border-radius:12px; background: var(--accent); border:none; height:45px;">Filtrar</button>
@@ -466,7 +490,6 @@ if($deptos_res) {
                 if(strtolower($row['prioridad']) === 'media') $badgePrioridadClass = 'badge-prioridad-media';
                 if(strtolower($row['prioridad']) === 'alta') $badgePrioridadClass = 'badge-prioridad-alta';
 
-                // Formatear fechas para visualización en las cards
                 $fecha_creacion_f = date('d/m/Y H:i', strtotime($row['fecha_creacion']));
                 $fecha_resolucion_f = !empty($row['fecha_mantenimiento']) ? date('d/m/Y H:i', strtotime($row['fecha_mantenimiento'])) : null;
                 $fecha_limite_f = !empty($displayDeadline) ? date('d/m/Y H:i', strtotime($displayDeadline)) : null;
@@ -490,7 +513,6 @@ if($deptos_res) {
                     <p class="text-secondary small mb-1">Técnico: <span class="text-white"><?php echo htmlspecialchars($row['tecnico_nombre'] ?? 'Pendiente'); ?></span></p>
                     <p class="text-secondary small mb-2" style="font-size:0.75rem;">Área: <span class="text-info"><?php echo htmlspecialchars($row['solicitante_depto'] ?? 'General'); ?></span></p>
 
-                    <!-- VISUALIZACIÓN DE FECHAS EN LA CARD -->
                     <div class="p-2 mb-3 rounded-3" style="background: rgba(11, 15, 26, 0.6); border: 1px solid rgba(255,255,255,0.05); font-size: 0.73rem;">
                         <div class="d-flex justify-content-between text-secondary mb-1">
                             <span><i class="bi bi-calendar-event me-1 text-info"></i>Creado:</span>
@@ -514,13 +536,11 @@ if($deptos_res) {
                         <a href="javascript:void(0)" onclick="verDetalle(this)" data-ticket="<?php echo $ticketJsonSeguro; ?>" class="text-info small text-decoration-none fw-bold">Detalles ></a>
                     </div>
 
-                    <?php if ($rol == 'administrador' || $rol == 'tecnico'): ?>
                     <div class="btn-action-group">
                         <div onclick="asignarTicket(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-person-plus text-info"></i><span>Asignar</span></div>
                         <div onclick="extenderTiempo(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-clock-history text-primary"></i><span>+Tiempo</span></div>
                         <div onclick="resolverTicket(<?php echo $row['id']; ?>, '<?php echo htmlspecialchars($row['estado'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes($row['detalle_resolucion'] ?? ''), ENT_QUOTES); ?>')" class="btn-action-card"><i class="bi bi-check2-circle text-success"></i><span>Estado</span></div>
                     </div>
-                    <?php endif; ?>
                 </div>
             </div>
             <?php endwhile; ?>
@@ -542,7 +562,6 @@ if($deptos_res) {
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script>
-        // --- DATOS PHP A JAVASCRIPT PARA GRÁFICOS ---
         const rawChartMes = <?php echo json_encode($chart_mes); ?>;
         const rawChartAnio = <?php echo json_encode($chart_anio); ?>;
         const rawChartHist = {
@@ -671,12 +690,10 @@ if($deptos_res) {
             document.body.removeChild(link);
         }
 
-        // Inicializar Gráfico con Vista Mensual
         document.addEventListener("DOMContentLoaded", () => {
             renderDiagrama('mes');
         });
 
-        // --- RELOJES / TIMERS DE TICKETS ---
         function updateTimers() {
             const now = new Date().getTime();
             document.querySelectorAll('.card-ticket').forEach(card => {
@@ -946,7 +963,6 @@ if($deptos_res) {
             });
         }
 
-        // DESCARGA DE REPORTES MANTENIENDO TODOS LOS FILTROS Y DATOS
         function solicitarReporte() {
             Swal.fire({
                 title: 'EXPORTAR REPORTE',
@@ -967,20 +983,16 @@ if($deptos_res) {
                 else if (result.isDenied) formato = 'pdf';
                 else return;
 
-                // Captura los valores del formulario actual
                 const formElement = document.getElementById('formFiltros');
                 const formData = new FormData(formElement);
                 const params = new URLSearchParams(formData);
                 
-                // Mantiene el filtro de estado si vino por la URL (p. ej. desde los cards de métricas)
                 const urlParams = new URLSearchParams(window.location.search);
                 if (urlParams.has('estado') && !params.get('estado')) {
                     params.set('estado', urlParams.get('estado'));
                 }
 
                 params.append('formato', formato);
-
-                // Redirige enviando todos los parámetros completos
                 window.location.href = `tickets_reporte.php?${params.toString()}`;
             });
         }
