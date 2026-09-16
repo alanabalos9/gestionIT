@@ -1,8 +1,8 @@
 <?php
 session_start();
-require_once 'db.php'; // Conexión a la base de datos[cite: 9]
+require_once 'db.php'; // Conexión a la base de datos
 
-// 1. Importar clases de PHPMailer[cite: 9]
+// 1. Importar clases de PHPMailer
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
@@ -10,11 +10,11 @@ require 'PHPMailer/Exception.php';
 require 'PHPMailer/PHPMailer.php';
 require 'PHPMailer/SMTP.php';
 
-// Función para enviar correo mediante PHPMailer[cite: 9]
+// Función para enviar correo mediante PHPMailer
 function enviarCorreoRestablecimiento($destinatario, $token, $url_restablecer) {
     $mail = new PHPMailer(true);
     try {
-        // Configuración del servidor SMTP (Gmail)[cite: 9]
+        // Configuración del servidor SMTP (Gmail)
         $mail->isSMTP();
         $mail->Host       = 'smtp.gmail.com'; 
         $mail->SMTPAuth   = true;
@@ -24,11 +24,11 @@ function enviarCorreoRestablecimiento($destinatario, $token, $url_restablecer) {
         $mail->Port       = 587;
         $mail->CharSet    = 'UTF-8';
 
-        // Emisor y Receptor[cite: 9]
+        // Emisor y Receptor
         $mail->setFrom('testadministrador@gmail.com', 'NEO ADMIN SYSTEM');
         $mail->addAddress($destinatario); 
 
-        // Contenido del correo en HTML[cite: 9]
+        // Contenido del correo en HTML
         $mail->isHTML(true);
         $mail->Subject = "Código y Enlace para Restablecer Contraseña - NEO ADMIN";
         
@@ -47,7 +47,7 @@ function enviarCorreoRestablecimiento($destinatario, $token, $url_restablecer) {
             <p style='margin-top: 20px; font-size: 12px; color: #94a3b8;'>Si el botón no funciona, copia y pega la siguiente URL en tu navegador:<br><a href='$url_restablecer' style='color: #38bdf8;'>$url_restablecer</a></p>
         </div>";
 
-        // Texto alternativo plano[cite: 9]
+        // Texto alternativo plano
         $mail->AltBody = "Tu código de confirmación es: $token\nEnlace para restablecer: $url_restablecer\n\nEste código expira en 15 minutos.";
 
         $mail->send();
@@ -61,7 +61,7 @@ function enviarCorreoRestablecimiento($destinatario, $token, $url_restablecer) {
 $mensaje = "";
 $error = "";
 
-// 2. Validar el parámetro inicial de la URL[cite: 9]
+// 2. Validar el parámetro inicial de la URL
 if (isset($_GET['user'])) {
     $usuario_target = trim($_GET['user']);
 } else {
@@ -69,7 +69,7 @@ if (isset($_GET['user'])) {
     exit();
 }
 
-// 3. Si se accede por GET (primera vez desde el enlace), se genera y envía el Token[cite: 9]
+// 3. Si se accede por GET (primera vez desde el enlace), se genera y envía el Token
 if ($_SERVER["REQUEST_METHOD"] == "GET") {
     // Buscar el email y el ID del usuario en la base de datos
     $stmt_email = $conexion->prepare("SELECT id, email FROM usuarios WHERE email = ? OR usuario = ?");
@@ -81,20 +81,20 @@ if ($_SERVER["REQUEST_METHOD"] == "GET") {
         $user_id = $row['id'];
         $email_destino = $row['email'];
         
-        // Generar token numérico de 6 dígitos y tiempo de expiración (15 minutos)[cite: 9]
+        // Generar token numérico de 6 dígitos y tiempo de expiración (15 minutos)
         $token = sprintf("%06d", mt_rand(0, 999999));
         $expiracion = date('Y-m-d H:i:s', strtotime('+15 minutes'));
 
-        // Guardar token y expiración usando el ID directo[cite: 9]
+        // Guardar token y expiración usando el ID directo
         $stmt_token = $conexion->prepare("UPDATE usuarios SET reset_token = ?, reset_token_expira = ? WHERE id = ?");
         $stmt_token->bind_param("ssi", $token, $expiracion, $user_id);
         $stmt_token->execute();
 
-        // Construir la URL dinámica actual para el enlace de restablecimiento[cite: 9]
+        // Construir la URL dinámica actual para el enlace de restablecimiento
         $protocolo = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? "https" : "http";
         $url_restablecer = $protocolo . "://" . $_SERVER['HTTP_HOST'] . $_SERVER['SCRIPT_NAME'] . "?user=" . urlencode($usuario_target);
 
-        // Enviar correo electrónico mediante PHPMailer[cite: 9]
+        // Enviar correo electrónico mediante PHPMailer
         if (!enviarCorreoRestablecimiento($email_destino, $token, $url_restablecer)) {
             $error = "No se pudo enviar el correo de verificación. Por favor intente más tarde.";
         }
@@ -103,16 +103,21 @@ if ($_SERVER["REQUEST_METHOD"] == "GET") {
     }
 }
 
-// 4. Procesar el formulario cuando el usuario envía el token y la nueva contraseña[cite: 9]
+// 4. Procesar el formulario cuando el usuario envía el token y la nueva contraseña
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $token_ingresado = trim($_POST['token']);
     $nueva_pass = $_POST['nueva_password'];
     $confirmar_pass = $_POST['confirmar_password'];
 
+    // Patrón Regex: 8 a 16 caracteres, al menos 1 minúscula, 1 mayúscula, 1 número y 1 carácter especial
+    $pattern = '/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&._\-#])[A-Za-z\d@$!%*?&._\-#]{8,16}$/';
+
     if (empty($token_ingresado) || empty($nueva_pass) || empty($confirmar_pass)) {
         $error = "Por favor complete todos los campos.";
     } elseif ($nueva_pass !== $confirmar_pass) {
         $error = "Las contraseñas no coinciden.";
+    } elseif (!preg_match($pattern, $nueva_pass)) {
+        $error = "La contraseña debe tener de 8 a 16 caracteres e incluir mayúscula, minúscula, número y un carácter especial.";
     } else {
         $fecha_actual = date('Y-m-d H:i:s');
 
@@ -129,7 +134,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             // Generar Hash BCRYPT seguro
             $pass_encriptada = password_hash($nueva_pass, PASSWORD_BCRYPT);
             
-            // Actualizar la contraseña apuntando al ID exacto en la BD
+            // Actualizar la contraseña apuntando al ID exacto en la BD y reiniciar tokens
             $stmt_upd = $conexion->prepare("UPDATE usuarios SET password = ?, ultima_modificacion_pass = ?, reset_token = NULL, reset_token_expira = NULL WHERE id = ?");
             $stmt_upd->bind_param("ssi", $pass_encriptada, $fecha_actual, $user_id);
 

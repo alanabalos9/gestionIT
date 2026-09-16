@@ -48,11 +48,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['btn_actualizar'])) {
     $confirmar_clave = $_POST['confirm_password'] ?? '';
     $nombre_foto = $user_data['foto_perfil'] ?? '';
 
-    // Validar coincidencia de contraseña si ingresó una nueva
+    // Validaciones de contraseña si el usuario ingresó una nueva
     if (!empty($nueva_clave) || !empty($confirmar_clave)) {
+        // Validar coincidencia
         if ($nueva_clave !== $confirmar_clave) {
             $mensaje = "Las contraseñas no coinciden. Por favor, verifica e intenta nuevamente.";
             $tipo_alerta = "danger";
+        } else {
+            // Expression Regular: 8-16 caps, 1 mayúscula, 1 minúscula, 1 número y 1 especial
+            $pattern = '/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&._\-#])[A-Za-z\d@$!%*?&._\-#]{8,16}$/';
+            if (!preg_match($pattern, $nueva_clave)) {
+                $mensaje = "La contraseña debe tener de 8 a 16 caracteres, al menos 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial.";
+                $tipo_alerta = "danger";
+            }
         }
     }
 
@@ -414,7 +422,7 @@ if (!empty($user_data['ultima_modificacion_pass'])) {
                                             <label class="cyber-label">NUEVA CONTRASEÑA</label>
                                             <div class="input-group cyber-input-box">
                                                 <span class="input-group-text"><i class="bi bi-key-fill"></i></span>
-                                                <input type="password" id="pass1" name="password" class="form-control text-white" placeholder="••••••••" autocomplete="new-password">
+                                                <input type="password" id="pass1" name="password" class="form-control text-white" placeholder="••••••••" autocomplete="new-password" minlength="8" maxlength="16" pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&._\-#])[A-Za-z\d@$!%*?&._\-#]{8,16}$">
                                                 <button class="btn btn-link text-white-50 p-0 me-2" type="button" onclick="toggleVisibility('pass1', 'eye1')">
                                                     <i class="bi bi-eye-slash-fill" id="eye1"></i>
                                                 </button>
@@ -425,7 +433,7 @@ if (!empty($user_data['ultima_modificacion_pass'])) {
                                             <label class="cyber-label">CONFIRMAR CONTRASEÑA</label>
                                             <div class="input-group cyber-input-box">
                                                 <span class="input-group-text"><i class="bi bi-key-fill"></i></span>
-                                                <input type="password" id="pass2" name="confirm_password" class="form-control text-white" placeholder="••••••••" autocomplete="new-password">
+                                                <input type="password" id="pass2" name="confirm_password" class="form-control text-white" placeholder="••••••••" autocomplete="new-password" minlength="8" maxlength="16">
                                                 <button class="btn btn-link text-white-50 p-0 me-2" type="button" onclick="toggleVisibility('pass2', 'eye2')">
                                                     <i class="bi bi-eye-slash-fill" id="eye2"></i>
                                                 </button>
@@ -433,7 +441,7 @@ if (!empty($user_data['ultima_modificacion_pass'])) {
                                         </div>
                                     </div>
 
-                                    <small class="text-muted mt-2 d-block">Dejar en blanco para mantener la contraseña actual. La contraseña se debe renovar cada 30 días.</small>
+                                    <small class="text-muted mt-2 d-block">Mín. 8–16 caps, 1 mayúscula, 1 minúscula, 1 número y 1 especial. Dejar en blanco para mantener la clave actual.</small>
                                 </div>
                             </div>
                         </div>
