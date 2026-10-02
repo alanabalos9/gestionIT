@@ -441,7 +441,7 @@ if (!empty($user_data['ultima_modificacion_pass'])) {
                                         </div>
                                     </div>
 
-                                    <small class="text-muted mt-2 d-block">Mín. 8–16 caps, 1 mayúscula, 1 minúscula, 1 número y 1 especial. Dejar en blanco para mantener la clave actual.</small>
+                                    <small class="text-info fw-semibold mt-2 d-block"><i class="bi bi-info-circle me-1"></i> Mín. 8–16 caps, 1 mayúscula, 1 minúscula, 1 número y 1 especial.</small>
                                 </div>
                             </div>
                         </div>

@@ -749,6 +749,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                         <div class="mb-3">
                             <label class="form-label small text-white-50 fw-bold ms-1">NUEVA CONTRASEÑA</label>
                             <input type="password" name="nueva_password_expirada" class="form-control" placeholder="••••••••" required pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$" title="Debe contener entre 8 y 16 caracteres, al menos una mayúscula, una minúscula, un número y un carácter especial.">
+                            <small class="d-block mt-1 fw-bold" style="color: #eab308; font-size: 0.72rem;">Mín. 8–16 caps, 1 mayúscula, 1 minúscula, 1 número y 1 especial.</small>
                         </div>
                         <div class="mb-4">
                             <label class="form-label small text-white-50 fw-bold ms-1">CONFIRMAR NUEVA CONTRASEÑA</label>
@@ -840,7 +841,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                             <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">CONTRASEÑA ASIGNADA</label>
                                 <input type="password" name="nueva_password" class="form-control" placeholder="••••••••" required pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$" title="Debe tener entre 8 y 16 caracteres, al menos una mayúscula, una minúscula, un número y un carácter especial.">
-                                <small class="text-white-50" style="font-size: 0.72rem;">Min. 8-16 caps, 1 mayúscula, 1 minúscula, 1 número y 1 especial.</small>
+                                <small class="d-block mt-1 fw-bold" style="color: #eab308; font-size: 0.72rem;">Mín. 8–16 caps, 1 mayúscula, 1 minúscula, 1 número y 1 especial.</small>
                             </div>
                             <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">FOTO DE PERFIL (OPCIONAL)</label>
@@ -974,6 +975,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                             <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">ASIGNAR NUEVA CONTRASEÑA (OPCIONAL)</label>
                                 <input type="password" name="nueva_password" class="form-control" placeholder="Dejar en blanco para no modificar" pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$" title="Debe tener entre 8 y 16 caracteres, al menos una mayúscula, una minúscula, un número y un carácter especial.">
+                                <small class="d-block mt-1 fw-bold" style="color: #eab308; font-size: 0.72rem;">Mín. 8–16 caps, 1 mayúscula, 1 minúscula, 1 número y 1 especial.</small>
                             </div>
                             <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">CAMBIAR FOTO DE PERFIL (OPCIONAL)</label>
