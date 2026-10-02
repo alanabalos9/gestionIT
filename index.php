@@ -14,7 +14,7 @@ $error = "";
 $success = "";
 $mostrar_modal_registro = false; // Bandera de control para levantar el formulario de registro
 
-// Banderas para persistencia de modales de administración si hay errores/éxitos específicos
+// Banderas para persistencia de modales de administración
 $mostrar_modal_baja = false;
 $mostrar_modal_editar = false;
 $usuario_a_editar = null;
@@ -23,13 +23,7 @@ $usuario_a_editar = null;
 $mostrar_modal_cambio_clave = false;
 
 /**
- * Función auxiliar para validar la fortaleza de la contraseña en el backend PHP
- * Reglas:
- * - Entre 8 y 16 caracteres
- * - Al menos una mayúscula (?=.*[A-Z])
- * - Al menos una minúscula / cursiva (?=.*[a-z])
- * - Al menos un número (?=.*\d)
- * - Al menos un carácter especial (?=.*[\W_])
+ * Función auxiliar para validar la fortaleza de la contraseña
  */
 function validarFormatoPassword($password) {
     $patron = '/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$/';
@@ -101,22 +95,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_GET['action']) && $_GET['act
     exit();
 }
 
-// 1. LÓGICA DE LOGIN NORMAL CON VERIFICACIÓN POR USUARIO O EMAIL Y CADUCIDAD DE CONTRASEÑA
+// 1. LÓGICA DE LOGIN NORMAL
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_login'])) {
     $user = trim($_POST['usuario']);
     $pass = $_POST['password'];
 
-    // Buscar si ingresó el nombre de usuario o el correo electrónico
     $stmt = $conexion->prepare("SELECT id, usuario, email, password, rol, foto_perfil, ultima_modificacion_pass FROM usuarios WHERE usuario = ? OR email = ?");
     $stmt->bind_param("ss", $user, $user);
     $stmt->execute();
     $resultado = $stmt->get_result();
 
     if ($row = $resultado->fetch_assoc()) {
-        // Verificar usando password_verify o texto plano (fallback)
         if (password_verify($pass, $row['password']) || $pass == $row['password']) {
-            
-            // --- CÁLCULO DE CADUCIDAD DE CONTRASEÑA ---
             $fecha_pass_str = $row['ultima_modificacion_pass'] ?? null;
             $dias_restantes = 30;
 
@@ -130,7 +120,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_login'])) {
             }
 
             if ($dias_restantes <= 0) {
-                // Caso 1: Clave vencida -> Activar modal de cambio obligatorio sin redirigir
                 $_SESSION['id_caducado'] = $row['id'];
                 $_SESSION['usuario_caducado'] = $row['usuario'];
                 $_SESSION['rol_caducado'] = $row['rol'];
@@ -138,14 +127,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_login'])) {
                 
                 $mostrar_modal_cambio_clave = true;
             } else {
-                // Iniciar sesión normal
                 $_SESSION['usuario_id'] = $row['id'];
                 $_SESSION['usuario']    = $row['usuario'];
                 $_SESSION['rol']        = $row['rol'];
                 $_SESSION['foto_perfil'] = !empty($row['foto_perfil']) ? $row['foto_perfil'] : 'default.png';
                 $_SESSION['forzar_cambio_clave'] = false;
                 
-                // Caso 2: 7 días o menos -> Marcar para mostrar advertencia en el dashboard
                 if ($dias_restantes <= 7) {
                     $_SESSION['mostrar_alerta_clave'] = true;
                     $_SESSION['dias_restantes_clave'] = $dias_restantes;
@@ -162,7 +149,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_login'])) {
     }
 }
 
-// 1.1 LÓGICA DE PROCESAMIENTO DE CAMBIO OBLIGATORIO DE CLAVE CADUCADA DESDE MODAL
+// 1.1 PROCESAMIENTO DE CAMBIO OBLIGATORIO DE CLAVE CADUCADA
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_cambiar_clave_expirada'])) {
     $pass1 = $_POST['nueva_password_expirada'];
     $pass2 = $_POST['confirmar_password_expirada'];
@@ -187,13 +174,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_cambiar_clave_expi
         $stmt_upd_pass->bind_param("ssi", $pass_hash, $fecha_actual, $user_id_exp);
 
         if ($stmt_upd_pass->execute()) {
-            // Promover las variables temporales a la sesión global e ingresar al sistema
             $_SESSION['usuario_id']  = $_SESSION['id_caducado'];
             $_SESSION['usuario']     = $_SESSION['usuario_caducado'];
             $_SESSION['rol']         = $_SESSION['rol_caducado'];
             $_SESSION['foto_perfil'] = $_SESSION['foto_perfil_caducado'];
 
-            // Limpiar temporales
             unset($_SESSION['id_caducado'], $_SESSION['usuario_caducado'], $_SESSION['rol_caducado'], $_SESSION['foto_perfil_caducado']);
 
             header("Location: dashboard.php");
@@ -205,7 +190,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_cambiar_clave_expi
     }
 }
 
-// 2. PASO 1: VERIFICACIÓN DE CREDENCIALES DE ADMINISTRADOR (Filtro de Seguridad)
+// 2. VERIFICACIÓN DE CREDENCIALES DE ADMINISTRADOR
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_verificar_admin'])) {
     $admin_user = trim($_POST['admin_usuario']);
     $admin_pass = $_POST['admin_password'];
@@ -231,7 +216,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_verificar_admin'])
     }
 }
 
-// 3. PASO 2: PROCESAR EL REGISTRO REAL DEL NUEVO USUARIO
+// 3. PROCESAR REGISTRO DEL NUEVO USUARIO
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'])) {
     $nombre_completo = trim($_POST['nombre_completo']);
     $nuevo_user      = trim($_POST['nuevo_usuario']);
@@ -241,9 +226,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'
     $area            = trim($_POST['area']);
     $pass1           = $_POST['nueva_password'];
 
+    // Forzar que el modal vuelva a abrirse para mostrar resultados
+    $mostrar_modal_registro = true;
+
     if (!validarFormatoPassword($pass1)) {
         $error = "Error de complejidad: La clave debe tener entre 8 y 16 caracteres, incluir al menos una mayúscula, una minúscula, un número y un carácter especial.";
-        $mostrar_modal_registro = true;
     } else {
         // Procesamiento de foto de perfil
         $nombre_foto = 'default.png';
@@ -270,8 +257,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'
         $res_check = $stmt_check->get_result();
 
         if ($res_check->num_rows > 0) {
-            $error = "Error de protocolo: El identificador, correo o DNI ya se encuentra asignado a otra cuenta.";
-            $mostrar_modal_registro = true;
+            $error = "Error de protocolo: El usuario, correo electrónico o DNI ya se encuentra registrado en el sistema.";
         } else {
             $pass_hash = password_hash($pass1, PASSWORD_BCRYPT);
             $fecha_actual = date('Y-m-d H:i:s');
@@ -280,16 +266,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'
             $stmt_ins->bind_param("sssssssss", $nombre_completo, $nuevo_user, $email, $dni, $pass_hash, $rol, $area, $nombre_foto, $fecha_actual);
 
             if ($stmt_ins->execute()) {
-                $success = "Ficha de usuario e identidad sincronizadas con éxito en el sistema.";
+                $success = "El usuario se ha registrado exitosamente en la base de datos.";
             } else {
-                $error = "Error de sistema: No se pudo escribir en el registro de credenciales.";
-                $mostrar_modal_registro = true;
+                $error = "Error de sistema: No se pudo registrar el usuario. " . $conexion->error;
             }
         }
     }
 }
 
-// LÓGICA DE BAJA DE USUARIO (PROCESAMIENTO)
+// LÓGICA DE BAJA DE USUARIO
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_baja_usuario'])) {
     $id_baja = $_POST['id_baja'];
     
@@ -304,7 +289,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_baja_usuario'])) {
     }
 }
 
-// LÓGICA DE BÚSQUEDA PARA EDITAR (PROCESAMIENTO TRADICIONAL Y DESDE AJAX)
+// LÓGICA DE BÚSQUEDA PARA EDITAR
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_buscar_editar'])) {
     $busqueda = trim($_POST['busqueda_editar']);
     
@@ -318,7 +303,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_buscar_editar'])) 
         $mostrar_modal_editar = true;
     } else {
         $error = "No se encontró ningún usuario con los criterios especificados para su edición.";
-        $mostrar_modal_registro = true; // Volver al panel anterior
+        $mostrar_modal_registro = true;
     }
 }
 
@@ -333,26 +318,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_actualizar_usuario
     $area            = trim($_POST['area']);
     $pass1           = $_POST['nueva_password'];
 
-    // Si se especificó una nueva contraseña en edición, debe cumplir las reglas
     if (!empty($pass1) && !validarFormatoPassword($pass1)) {
         $error = "Error de complejidad: La nueva clave debe tener entre 8 y 16 caracteres, incluir al menos una mayúscula, una minúscula, un número y un carácter especial.";
         $mostrar_modal_editar = true;
-        // Volver a cargar los datos del usuario para mostrar modal correctamente
         $stmt_reload = $conexion->prepare("SELECT * FROM usuarios WHERE id = ?");
         $stmt_reload->bind_param("i", $id_edit);
         $stmt_reload->execute();
         $usuario_a_editar = $stmt_reload->get_result()->fetch_assoc();
     } else {
-        // Verificar duplicados excluyendo el usuario actual
         $stmt_check = $conexion->prepare("SELECT id FROM usuarios WHERE (usuario = ? OR email = ? OR dni = ?) AND id != ?");
         $stmt_check->bind_param("sssi", $nuevo_user, $email, $dni, $id_edit);
         $stmt_check->execute();
         $res_check = $stmt_check->get_result();
 
         if ($res_check->num_rows > 0) {
-            $error = "Error de conflicto: Los nuevos datos ingresados pertenecen a otra entidad de la red.";
+            $error = "Error de conflicto: Los nuevos datos ingresados pertenecen a otro usuario.";
+            $mostrar_modal_editar = true;
+            $stmt_reload = $conexion->prepare("SELECT * FROM usuarios WHERE id = ?");
+            $stmt_reload->bind_param("i", $id_edit);
+            $stmt_reload->execute();
+            $usuario_a_editar = $stmt_reload->get_result()->fetch_assoc();
         } else {
-            // Verificar si se subió una nueva foto en la edición
             $nueva_foto = null;
             if (isset($_FILES['foto_perfil']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
                 $fileTmpPath   = $_FILES['foto_perfil']['tmp_name'];
@@ -372,7 +358,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_actualizar_usuario
 
             $fecha_actual = date('Y-m-d H:i:s');
 
-            // Construcción de consulta dinámica según si cambia password o foto
             if (!empty($pass1) && $nueva_foto !== null) {
                 $pass_hash = password_hash($pass1, PASSWORD_BCRYPT);
                 $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre_completo=?, usuario=?, email=?, dni=?, password=?, rol=?, area=?, foto_perfil=?, ultima_modificacion_pass=? WHERE id=?");
@@ -393,19 +378,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_actualizar_usuario
                 if (isset($_SESSION['usuario_id']) && $_SESSION['usuario_id'] == $id_edit && $nueva_foto !== null) {
                     $_SESSION['foto_perfil'] = $nueva_foto;
                 }
-                $success = "La ficha de identidad y privilegios del usuario han sido actualizados con éxito.";
+                $success = "La ficha de usuario ha sido actualizada con éxito.";
             } else {
-                $error = "Error de sistema: Fallo al reescribir la matriz de datos.";
+                $error = "Error de sistema: Fallo al actualizar los datos.";
             }
         }
     }
 }
 
-// 4. LÓGICA DE RECUPERACIÓN (URL DINÁMICA SEGÚN ENTORNO / DOMINIO)
+// 4. LÓGICA DE RECUPERACIÓN DE CLAVE
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_recuperar'])) {
     $email_rec = trim($_POST['email_recuperacion']);
     
-    // Construcción dinámica del enlace de restablecimiento
     $protocolo = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? "https" : "http";
     $directorio_actual = dirname($_SERVER['SCRIPT_NAME']);
     $directorio_limpio = ($directorio_actual == '/' || $directorio_actual == '\\') ? '' : $directorio_actual;
@@ -428,7 +412,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_recuperar'])) {
     }
 }
 
-// Mini endpoint para la búsqueda interactiva asíncrona de usuarios a dar de baja
+// Endpoints AJAX para búsquedas
 if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_baja' && isset($_GET['term'])) {
     ob_clean();
     header('Content-Type: application/json');
@@ -447,7 +431,6 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_baja' && isset($_G
     exit();
 }
 
-// Mini endpoint para la búsqueda interactiva asíncrona de usuarios a editar/modificar
 if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($_GET['term'])) {
     ob_clean();
     header('Content-Type: application/json');
@@ -689,13 +672,13 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
             <p class="text-white-50 small text-uppercase fw-light" style="letter-spacing: 2px;">Protocolo de Autenticación</p>
         </div>
 
-        <?php if($error && !$mostrar_modal_cambio_clave): ?>
+        <?php if($error && !$mostrar_modal_registro && !$mostrar_modal_cambio_clave && !$mostrar_modal_editar): ?>
             <div class="status-alert alert-danger">
                 <i class="bi bi-exclamation-triangle-fill fs-5"></i> <?php echo $error; ?>
             </div>
         <?php endif; ?>
         
-        <?php if($success): ?>
+        <?php if($success && !$mostrar_modal_registro): ?>
             <div class="status-alert alert-success">
                 <i class="bi bi-shield-check fs-5"></i> <?php echo $success; ?>
             </div>
@@ -729,6 +712,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
         </form>
     </div>
 
+    <!-- MODAL CAMBIO CLAVE EXPIRADA -->
     <div class="modal fade" id="modalClaveExpirada" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content" style="background: #0f172a; border: 1px solid #f43f5e; border-radius: 25px; box-shadow: 0 0 40px rgba(244, 63, 94, 0.4);">
@@ -762,6 +746,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
         </div>
     </div>
 
+    <!-- MODAL AUTENTICACIÓN ADMIN -->
     <div class="modal fade" id="modalFiltroAdmin" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content" style="background: #0f172a; border: 1px solid #f43f5e; border-radius: 25px; box-shadow: 0 0 40px rgba(244, 63, 94, 0.3);">
@@ -788,6 +773,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
         </div>
     </div>
 
+    <!-- MODAL REGISTRO DE USUARIO -->
     <div class="modal fade" id="modalRegistro" tabindex="-1" data-bs-backdrop="static">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content" style="background: #0f172a; border: 1px solid var(--neon-blue); border-radius: 25px; box-shadow: 0 0 40px rgba(56, 189, 248, 0.4);">
@@ -807,6 +793,19 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                         <h4 class="text-white fw-bold mt-2">ALTA DE NUEVO USUARIO</h4>
                         <p class="text-white-50 small">Complete los campos de identidad solicitados para el registro en la infraestructura.</p>
                     </div>
+
+                    <!-- NOTIFICACIONES DE ÉXITO O ERROR DENTRO DEL MODAL -->
+                    <?php if($error && $mostrar_modal_registro): ?>
+                        <div class="status-alert alert-danger mb-4">
+                            <i class="bi bi-exclamation-triangle-fill fs-5"></i> <?php echo $error; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if($success && $mostrar_modal_registro): ?>
+                        <div class="status-alert alert-success mb-4">
+                            <i class="bi bi-shield-check fs-5"></i> <?php echo $success; ?>
+                        </div>
+                    <?php endif; ?>
                     
                     <form action="index.php" method="POST" enctype="multipart/form-data" onsubmit="return validarPasswordFront(this.nueva_password.value)">
                         <div class="row">
@@ -833,8 +832,8 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                             <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">ROL DEL SISTEMA</label>
                                 <select name="rol" class="form-select" required>
-                                    <option value="usuario">Usuario Estándar</option>
-                                    <option value="admin">Administrador Global</option>
+                                    <option value="administrador">Administrador Global</option>
+                                    <option value="operativo">Operativo</option>
                                     <option value="tecnico">Técnico TI</option>
                                 </select>
                             </div>
@@ -859,6 +858,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
         </div>
     </div>
 
+    <!-- MODAL BAJA USUARIO -->
     <div class="modal fade" id="modalBajaUsuario" tabindex="-1" data-bs-backdrop="static">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content" style="background: #0f172a; border: 1px solid var(--neon-red); border-radius: 25px; box-shadow: 0 0 40px rgba(244, 63, 94, 0.4);">
@@ -898,6 +898,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
         </div>
     </div>
 
+    <!-- MODAL BUSCAR PARA EDITAR -->
     <div class="modal fade" id="modalBuscarEditar" tabindex="-1" data-bs-backdrop="static">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content" style="background: #0f172a; border: 1px solid var(--neon-yellow); border-radius: 25px; box-shadow: 0 0 40px rgba(234, 179, 8, 0.4);">
@@ -930,6 +931,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
         </div>
     </div>
 
+    <!-- MODAL EDITAR USUARIO -->
     <?php if ($mostrar_modal_editar && $usuario_a_editar): ?>
     <div class="modal fade" id="modalEditarUsuario" tabindex="-1" data-bs-backdrop="static">
         <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -940,6 +942,12 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                         <h4 class="text-white fw-bold mt-2">EDITAR MATRIZ DE IDENTIDAD</h4>
                         <p class="text-white-50 small">Modifique los campos correspondientes. Deje la contraseña en blanco si prefiere conservar la actual.</p>
                     </div>
+
+                    <?php if($error): ?>
+                        <div class="status-alert alert-danger mb-4">
+                            <i class="bi bi-exclamation-triangle-fill fs-5"></i> <?php echo $error; ?>
+                        </div>
+                    <?php endif; ?>
                     
                     <form action="index.php" method="POST" enctype="multipart/form-data" onsubmit="return (this.nueva_password.value === '' || validarPasswordFront(this.nueva_password.value))">
                         <input type="hidden" name="id_editar" value="<?php echo $usuario_a_editar['id']; ?>">
@@ -967,8 +975,8 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                             <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">ROL DEL SISTEMA</label>
                                 <select name="rol" class="form-select" required>
-                                    <option value="usuario" <?php echo ($usuario_a_editar['rol'] == 'usuario') ? 'selected' : ''; ?>>Usuario Estándar</option>
-                                    <option value="admin" <?php echo ($usuario_a_editar['rol'] == 'admin') ? 'selected' : ''; ?>>Administrador Global</option>
+                                    <option value="administrador" <?php echo ($usuario_a_editar['rol'] == 'admin' || $usuario_a_editar['rol'] == 'administrador') ? 'selected' : ''; ?>>Administrador Global</option>
+                                    <option value="operativo" <?php echo ($usuario_a_editar['rol'] == 'operativo' || $usuario_a_editar['rol'] == 'usuario') ? 'selected' : ''; ?>>Operativo</option>
                                     <option value="tecnico" <?php echo ($usuario_a_editar['rol'] == 'tecnico') ? 'selected' : ''; ?>>Técnico TI</option>
                                 </select>
                             </div>
@@ -994,6 +1002,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
     </div>
     <?php endif; ?>
 
+    <!-- MODAL RECUPERAR -->
     <div class="modal fade" id="modalRecuperar" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content" style="background: #0f172a; border: 1px solid var(--neon-blue); border-radius: 25px; box-shadow: 0 0 40px rgba(56, 189, 248, 0.4);">
@@ -1013,6 +1022,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
         </div>
     </div>
 
+    <!-- BOT TERMINAL DE AYUDA -->
     <div class="support-bot-trigger" onclick="toggleBot()">
         <i class="bi bi-headset"></i>
     </div>
@@ -1066,7 +1076,6 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                 bot.style.display = 'none';
             } else {
                 bot.style.display = 'block';
-                // Resetear el bot al paso 1 al abrirlo
                 resetearBot();
             }
         }
