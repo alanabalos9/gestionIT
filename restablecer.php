@@ -109,15 +109,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $nueva_pass = $_POST['nueva_password'];
     $confirmar_pass = $_POST['confirmar_password'];
 
-    // Patrón Regex: 8 a 16 caracteres, al menos 1 minúscula, 1 mayúscula, 1 número y 1 carácter especial
-    $pattern = '/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&._\-#])[A-Za-z\d@$!%*?&._\-#]{8,16}$/';
+    // Patrón Regex: 8 a 16 caracteres, min. 1 minúscula, 1 mayúscula, 1 número y 1 carácter especial
+    $pattern = '/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$/';
 
     if (empty($token_ingresado) || empty($nueva_pass) || empty($confirmar_pass)) {
         $error = "Por favor complete todos los campos.";
     } elseif ($nueva_pass !== $confirmar_pass) {
         $error = "Las contraseñas no coinciden.";
     } elseif (!preg_match($pattern, $nueva_pass)) {
-        $error = "La contraseña debe tener de 8 a 16 caracteres e incluir mayúscula, minúscula, número y un carácter especial.";
+        $error = "La contraseña debe tener de 8 a 16 caracteres e incluir al menos 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial.";
     } else {
         $fecha_actual = date('Y-m-d H:i:s');
 
@@ -270,11 +270,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             transition: all 0.3s ease;
         }
 
-        .form-control-cyber:focus {
+        .form-control-cyber:focus-within {
             background: rgba(2, 6, 23, 1);
             border-color: var(--neon-blue);
             box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
-            color: white;
         }
 
         .input-group-cyber .input-group-text {
@@ -334,6 +333,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             border-color: rgba(239, 68, 68, 0.4);
             box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
         }
+
+        .password-requirements {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-top: 6px;
+            text-align: left;
+            line-height: 1.4;
+        }
     </style>
 </head>
 <body>
@@ -348,6 +355,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <div class="user-tag">
         <i class="bi bi-person-bounding-box"></i>
         <span><?php echo htmlspecialchars($usuario_target); ?></span>
+    </div>
+
+    <div id="js-alert" class="status-alert alert-cyber-danger d-none">
+        <i class="bi bi-exclamation-octagon fs-5"></i> <span id="js-alert-text"></span>
     </div>
 
     <?php if ($mensaje): ?>
@@ -366,7 +377,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
         <?php endif; ?>
 
-        <form method="POST">
+        <form id="resetForm" method="POST">
             <div class="mb-4 text-start">
                 <label class="form-label-cyber">CÓDIGO DE CONFIRMACIÓN</label>
                 <div class="input-group input-group-cyber form-control-cyber">
@@ -374,18 +385,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <input type="text" name="token" class="form-control border-0 bg-transparent text-white p-0 ps-3" required placeholder="123456" maxlength="6" autocomplete="off">
                 </div>
             </div>
-            <div class="mb-4 text-start">
+            <div class="mb-3 text-start">
                 <label class="form-label-cyber">NUEVA CONTRASEÑA</label>
                 <div class="input-group input-group-cyber form-control-cyber">
                     <span class="input-group-text"><i class="bi bi-key"></i></span>
-                    <input type="password" name="nueva_password" class="form-control border-0 bg-transparent text-white p-0 ps-3" required placeholder="••••••••">
+                    <input type="password" id="nueva_password" name="nueva_password" class="form-control border-0 bg-transparent text-white p-0 ps-3" required placeholder="••••••••" maxlength="16">
+                </div>
+                <div class="password-requirements">
+                    <i class="bi bi-info-circle me-1"></i>Mínimo 8-16 caracteres, 1 mayúscula, 1 minúscula, 1 número y 1 símbolo especial.
                 </div>
             </div>
-            <div class="mb-5 text-start">
+            <div class="mb-4 text-start">
                 <label class="form-label-cyber">CONFIRMAR CONTRASEÑA</label>
                 <div class="input-group input-group-cyber form-control-cyber">
                     <span class="input-group-text"><i class="bi bi-key-fill"></i></span>
-                    <input type="password" name="confirmar_password" class="form-control border-0 bg-transparent text-white p-0 ps-3" required placeholder="••••••••">
+                    <input type="password" id="confirmar_password" name="confirmar_password" class="form-control border-0 bg-transparent text-white p-0 ps-3" required placeholder="••••••••" maxlength="16">
                 </div>
             </div>
             <button type="submit" class="btn-cyber-primary">GUARDAR CAMBIOS</button>
@@ -394,5 +408,43 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('resetForm');
+    if (!form) return;
+
+    const passInput = document.getElementById('nueva_password');
+    const confirmInput = document.getElementById('confirmar_password');
+    const alertBox = document.getElementById('js-alert');
+    const alertText = document.getElementById('js-alert-text');
+
+    // Mínimo 8 a 16 chars, 1 minúscula, 1 mayúscula, 1 número y 1 símbolo/carácter especial
+    const passPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$/;
+
+    form.addEventListener('submit', function (e) {
+        const pass = passInput.value;
+        const confirmPass = confirmInput.value;
+
+        if (pass !== confirmPass) {
+            e.preventDefault();
+            showAlert('Las contraseñas no coinciden.');
+            return;
+        }
+
+        if (!passPattern.test(pass)) {
+            e.preventDefault();
+            showAlert('La contraseña debe tener entre 8 y 16 caracteres, incluir al menos 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial.');
+            return;
+        }
+
+        alertBox.classList.add('d-none');
+    });
+
+    function showAlert(msg) {
+        alertText.textContent = msg;
+        alertBox.classList.remove('d-none');
+    }
+});
+</script>
 </body>
 </html>

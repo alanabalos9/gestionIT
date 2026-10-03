@@ -105,17 +105,14 @@ $stats_res = $conexion->query($query_stats);
 $stats = $stats_res->fetch_assoc();
 
 // --- 2. CONSULTA PARA DATOS DE DIAGRAMAS/GRÁFICOS (MES, HISTÓRICO Y ANUAL) ---
-// Estadísticas Mes Actual
 $q_mes = $conexion->query("SELECT estado, COUNT(*) as cant FROM tickets WHERE MONTH(fecha_creacion) = MONTH(CURRENT_DATE()) AND YEAR(fecha_creacion) = YEAR(CURRENT_DATE()) GROUP BY estado");
 $chart_mes = ['Nuevo' => 0, 'En curso' => 0, 'Resuelto' => 0, 'Cerrado' => 0];
 while($r = $q_mes->fetch_assoc()) { if(isset($chart_mes[$r['estado']])) $chart_mes[$r['estado']] = (int)$r['cant']; }
 
-// Estadísticas Año Actual
 $q_anio = $conexion->query("SELECT estado, COUNT(*) as cant FROM tickets WHERE YEAR(fecha_creacion) = YEAR(CURRENT_DATE()) GROUP BY estado");
 $chart_anio = ['Nuevo' => 0, 'En curso' => 0, 'Resuelto' => 0, 'Cerrado' => 0];
 while($r = $q_anio->fetch_assoc()) { if(isset($chart_anio[$r['estado']])) $chart_anio[$r['estado']] = (int)$r['cant']; }
 
-// Estadísticas Histórico (Últimos 6 meses por Nombre de Mes)
 $q_hist = $conexion->query("SELECT DATE_FORMAT(fecha_creacion, '%Y-%m') as mes_key, DATE_FORMAT(fecha_creacion, '%b %Y') as mes_nombre, COUNT(*) as total,
     SUM(CASE WHEN estado IN ('Resuelto', 'Cerrado') THEN 1 ELSE 0 END) as resueltos,
     SUM(CASE WHEN estado IN ('Nuevo', 'En curso') THEN 1 ELSE 0 END) as pendientes
@@ -207,44 +204,31 @@ if($deptos_res) {
         .logo-img { height: 35px; }
         .nav-link-neo { text-decoration: none; padding: 8px 16px; border-radius: 10px; font-size: 0.9rem; color: var(--text-gray); display: flex; align-items: center; gap: 8px; transition: 0.2s; }
         .nav-link-neo:hover { color: #fff; background: rgba(255, 255, 255, 0.05); }
-
         .logout-btn { color: #f87171; border: 1px solid rgba(248, 113, 113, 0.2); }
-
-        .user-avatar {
-            width: 38px; height: 38px; object-fit: cover; border-radius: 50%;
-            border: 2px solid var(--accent); background-color: var(--card-bg);
-        }
-        
+        .user-avatar { width: 38px; height: 38px; object-fit: cover; border-radius: 50%; border: 2px solid var(--accent); background-color: var(--card-bg); }
         .card-stat { background: var(--card-bg); border-radius: 15px; border: 1px solid rgba(255,255,255,0.05); padding: 15px; text-align: center; text-decoration: none; display: block; transition: 0.2s; }
         .card-stat:hover { border-color: var(--accent); transform: translateY(-2px); }
         .card-stat h6 { font-family: 'Orbitron'; font-weight: bold; font-size: 1.4rem; margin: 0; }
         .card-stat-title { color: #cbd5e1 !important; font-size: 0.75rem; font-weight: 700; letter-spacing: 1px; display: block; margin-bottom: 4px; }
-        
         .card-ticket { background: var(--card-bg); border-radius: 20px; border: 1px solid rgba(255,255,255,0.05); padding: 1.5rem; height: 100%; transition: all 0.3s ease; position: relative; border-left: 5px solid transparent; }
         .card-normal { border-left-color: var(--accent); }
         .card-nuevo { border-left-color: #38bdf8; background: rgba(56, 189, 248, 0.02); }
         .card-en-curso { border-left-color: #fbbf24; background: rgba(251, 191, 36, 0.02); }
         .card-expired { border-left-color: var(--danger-alert); background: rgba(239, 68, 68, 0.05); animation: pulse-red 2s infinite; }
-        
         .badge-prioridad-baja { background-color: rgba(16, 185, 129, 0.15) !important; color: #10b981 !important; border: 1px solid rgba(16, 185, 129, 0.3); }
         .badge-prioridad-media { background-color: rgba(245, 158, 11, 0.15) !important; color: #f59e0b !important; border: 1px solid rgba(245, 158, 11, 0.3); }
         .badge-prioridad-alta { background-color: rgba(239, 68, 68, 0.15) !important; color: #ef4444 !important; border: 1px solid rgba(239, 68, 68, 0.4); box-shadow: 0 0 8px rgba(239, 68, 68, 0.2); }
-
         .form-control-neo { background: rgba(15, 23, 42, 0.8) !important; border: 1px solid var(--glass-border) !important; color: #ffffff !important; border-radius: 12px; padding: 12px; }
         .form-control-neo:focus { box-shadow: 0 0 0 2px var(--accent-soft); border-color: var(--accent) !important; }
-        
         .form-select-neo { background: rgba(15, 23, 42, 0.8) url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e") no-repeat right 0.75rem center/16px 12px !important; border: 1px solid var(--glass-border) !important; color: #ffffff !important; border-radius: 12px; padding: 10px; font-size: 0.85rem; }
         .form-select-neo:focus { box-shadow: 0 0 0 2px var(--accent-soft); border-color: var(--accent) !important; }
         .form-select-neo option { background-color: #0f172a !important; color: white !important; }
-
         .search-wrapper-neo { position: relative; }
         .search-wrapper-neo i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-gray); }
         .search-wrapper-neo input { padding-left: 38px !important; }
-        
         .neo-swal-popup { background: rgba(22, 28, 45, 0.95) !important; backdrop-filter: blur(15px); border: 1px solid rgba(56, 189, 248, 0.2) !important; border-radius: 20px !important; box-shadow: 0 20px 50px rgba(0,0,0,0.5) !important; color: #f8fafc !important; }
         .neo-swal-title { font-family: 'Orbitron', sans-serif !important; font-weight: bold !important; letter-spacing: 1px; color: #fff !important; font-size: 1.3rem !important; }
         .neo-swal-input, .neo-swal-textarea, .neo-swal-select { background-color: #0b0f1a !important; color: white !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 12px !important; padding: 10px !important; font-family: 'Inter', sans-serif; }
-        
         @keyframes pulse-red {
             0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2); }
             70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
@@ -256,9 +240,7 @@ if($deptos_res) {
         .btn-action-card:hover { background: var(--accent-soft); border-color: var(--accent); }
         .btn-action-card i { font-size: 1.1rem; margin-bottom: 3px; }
         .btn-action-card span { font-size: 8px; text-transform: uppercase; color: var(--text-gray); font-weight: 700; }
-        
         .label-date-neo { font-size: 0.75rem; color: var(--text-gray); font-weight: 600; margin-bottom: 4px; display: block; padding-left: 4px; }
-        
         .btn-tab-chart { background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); color: var(--text-gray); font-size: 0.8rem; font-weight: 600; padding: 6px 14px; border-radius: 10px; transition: 0.2s; }
         .btn-tab-chart.active, .btn-tab-chart:hover { background: var(--accent); color: #0b0f1a; border-color: var(--accent); font-weight: bold; }
     </style>
@@ -273,7 +255,7 @@ if($deptos_res) {
         <div class="d-flex align-items-center gap-2">
             <a href="dashboard.php" class="nav-link-neo"><i class="bi bi-house-door"></i> Inicio</a>
             <a href="tickets_lista.php" class="nav-link-neo" style="background: var(--accent-soft); color: var(--accent);"><i class="bi bi-headset"></i> Mesa de Ayuda</a>
-			<a href="bc_lista.php" class="nav-link-neo"><i class="bi bi-journal-text"></i> Base de Conocimiento</a>
+            <a href="bc_lista.php" class="nav-link-neo"><i class="bi bi-journal-text"></i> Base de Conocimiento</a>
             <div class="vr mx-2 opacity-25" style="height: 20px; align-self: center;"></div>
 
             <div class="dropdown me-2">
@@ -752,7 +734,7 @@ if($deptos_res) {
                 return;
             }
 
-            let adjuntoHtml = `<div class="py-2 text-muted small"><i class="bi bi-paperclip me-1" style="font-size: 1.2rem;"></i> Sin archivos adjuntos.</div>`;
+            let adjuntoHtml = `<div class="py-2 text-secondary small"><i class="bi bi-paperclip me-1" style="font-size: 1.2rem;"></i> Sin archivos adjuntos.</div>`;
 
             if (ticket.adjunto) {
                 const rutaControlador = `ver_adjunto.php?id=${ticket.id}`;
@@ -761,11 +743,13 @@ if($deptos_res) {
 
                 if (tipoMime.includes('image/png') || tipoMime.includes('image/jpeg') || tipoMime.includes('image/jpg')) {
                     adjuntoHtml = `
-                        <img src="${rutaControlador}" alt="Adjunto" class="img-fluid rounded-2 mb-2" style="max-height: 180px; object-fit: contain; border: 1px solid rgba(255,255,255,0.1);"><br>
-                        <p class="small text-muted mb-1 text-truncate px-2">${nombreArchivo}</p>
-                        <a href="${rutaControlador}" target="_blank" class="btn btn-sm btn-outline-info fw-bold mt-1" style="font-size: 0.75rem; border-radius: 8px;">
-                            <i class="bi bi-eye me-1"></i> Ver Imagen Completa
-                        </a>`;
+                        <div class="text-center">
+                            <img src="${rutaControlador}" alt="Adjunto" class="img-fluid rounded-2 mb-2" style="max-height: 180px; width: auto; object-fit: contain; border: 1px solid rgba(255,255,255,0.1);"><br>
+                            <p class="small text-secondary mb-1 text-truncate px-2" style="max-width: 100%;">${nombreArchivo}</p>
+                            <a href="${rutaControlador}" target="_blank" class="btn btn-sm btn-outline-info fw-bold mt-1" style="font-size: 0.75rem; border-radius: 8px;">
+                                <i class="bi bi-eye me-1"></i> Ver Imagen Completa
+                            </a>
+                        </div>`;
                 } else if (tipoMime.includes('pdf')) {
                     adjuntoHtml = `
                         <div class="py-2">
@@ -798,8 +782,8 @@ if($deptos_res) {
                     </div>`;
             } else {
                 detalleResolucionHtml = `
-                    <div class="mb-3 p-3 rounded-3" style="background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.1);">
-                        <span class="small text-muted"><i class="bi bi-info-circle me-1"></i> No se han registrado comentarios o observaciones sobre el estado.</span>
+                    <div class="mb-3 p-3 rounded-3" style="background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.15);">
+                        <span class="small text-secondary"><i class="bi bi-info-circle me-1 text-info"></i> No se han registrado comentarios u observaciones sobre el estado.</span>
                     </div>`;
             }
 
@@ -809,7 +793,7 @@ if($deptos_res) {
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" style="padding: 25px;">
-                    <form id="formEditarTicketBase" onsubmit="event.preventDefault(); guardarCambiosTicketBase();">
+                    <form id="formEditarTicketBase" onsubmit="guardarCambiosTicketBase(event)">
                         <input type="hidden" name="id" value="${ticket.id}">
                         <input type="hidden" name="accion" value="editar_basico">
 
@@ -874,7 +858,8 @@ if($deptos_res) {
             icon.style.color = (valor === 'Baja') ? '#10b981' : (valor === 'Media') ? '#f59e0b' : '#ef4444';
         }
 
-        function guardarCambiosTicketBase() {
+        function guardarCambiosTicketBase(e) {
+            if(e) e.preventDefault();
             const formulario = document.getElementById('formEditarTicketBase');
             if (!formulario.reportValidity()) return;
 
@@ -886,7 +871,7 @@ if($deptos_res) {
                     Swal.fire({ 
                         icon: 'success', 
                         title: 'TICKET ACTUALIZADO', 
-                        text: 'Los cambios de prioridad, incidencia y texto fueron guardados.',
+                        text: 'Los cambios de prioridad, tipo y textos fueron guardados.',
                         customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' },
                         showConfirmButton: false, 
                         timer: 1500 
@@ -915,7 +900,7 @@ if($deptos_res) {
             const { value: tId } = await Swal.fire({
                 title: 'ASIGNAR TÉCNICO',
                 input: 'select',
-                inputOptions: { <?php foreach($tecnicos as $t) echo "'{$t['id']}': '".addslashes($t['nombre_completo'])."',"; ?> },
+                inputOptions: { <?php foreach($tecnicos as$t) echo "'{$t['id']}': '".addslashes($t['nombre_completo'])."',"; ?> },
                 customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title', input: 'neo-swal-select' },
                 confirmButtonColor: '#38bdf8', showCancelButton: true, cancelButtonColor: '#475569'
             });
