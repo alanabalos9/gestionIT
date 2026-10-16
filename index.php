@@ -282,28 +282,36 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'
     }
 }
 
-// LÓGICA DE BAJA DE USUARIO (Con limpieza previa de dependencias en tickets para evitar errores de clave foránea)
+// LÓGICA DE BAJA DE USUARIO (Con transacción y manejo seguro de claves foráneas)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_baja_usuario'])) {
     $id_baja = $_POST['id_baja'];
     
-    // 1. Liberar los tickets donde este usuario era el técnico asignado
-    $stmt_liberar_tec = $conexion->prepare("UPDATE tickets SET tecnico_id = NULL WHERE tecnico_id = ?");
-    $stmt_liberar_tec->bind_param("i", $id_baja);
-    $stmt_liberar_tec->execute();
-
-    // 2. Liberar o eliminar tickets donde este usuario era el solicitante (si aplica en tu diseño)
-    $stmt_liberar_sol = $conexion->prepare("UPDATE tickets SET solicitante_id = NULL WHERE solicitante_id = ?");
-    $stmt_liberar_sol->bind_param("i", $id_baja);
-    $stmt_liberar_sol->execute();
-
-    // 3. Proceder a eliminar al usuario de la base de datos con seguridad
-    $stmt_del = $conexion->prepare("DELETE FROM usuarios WHERE id = ?");
-    $stmt_del->bind_param("i", $id_baja);
+    // Iniciar transacción para asegurar consistencia
+    $conexion->begin_transaction();
     
-    if ($stmt_del->execute()) {
+    try {
+        // 1. Liberar los tickets donde este usuario era el técnico asignado
+        $stmt_liberar_tec = $conexion->prepare("UPDATE tickets SET tecnico_id = NULL WHERE tecnico_id = ?");
+        $stmt_liberar_tec->bind_param("i", $id_baja);
+        $stmt_liberar_tec->execute();
+
+        // 2. Liberar los tickets donde este usuario era el solicitante
+        $stmt_liberar_sol = $conexion->prepare("UPDATE tickets SET solicitante_id = NULL WHERE solicitante_id = ?");
+        $stmt_liberar_sol->bind_param("i", $id_baja);
+        $stmt_liberar_sol->execute();
+
+        // 3. Proceder a eliminar al usuario de la base de datos con seguridad
+        $stmt_del = $conexion->prepare("DELETE FROM usuarios WHERE id = ?");
+        $stmt_del->bind_param("i", $id_baja);
+        $stmt_del->execute();
+
+        // Confirmar transacción si todo sale bien
+        $conexion->commit();
         $success = "El usuario ha sido dado de baja del sistema con éxito.";
-    } else {
-        $error = "Error de sistema: No se pudo eliminar el registro de la red.";
+    } catch (Exception $e) {
+        // Revertir cambios en caso de fallo
+        $conexion->rollback();
+        $error = "Error de sistema: No se pudo eliminar el registro de la red. " . $e->getMessage();
         $mostrar_modal_baja = true;
     }
 }
