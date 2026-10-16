@@ -382,31 +382,31 @@ if($deptos_res) {
             <div class="col-md">
                 <a href="tickets_lista.php" class="card-stat">
                     <span class="card-stat-title">TOTAL</span>
-                    <h6><?php echo $stats['total']; ?></h6>
+                    <h6 id="stat-total"><?php echo $stats['total']; ?></h6>
                 </a>
             </div>
             <div class="col-md">
                 <a href="tickets_lista.php?estado=Nuevo" class="card-stat">
                     <span class="card-stat-title">NUEVOS</span>
-                    <h6 class="text-info"><?php echo $stats['nuevos'] ?? 0; ?></h6>
+                    <h6 class="text-info" id="stat-nuevos"><?php echo $stats['nuevos'] ?? 0; ?></h6>
                 </a>
             </div>
             <div class="col-md">
                 <a href="tickets_lista.php?estado=En curso" class="card-stat">
                     <span class="card-stat-title">EN CURSO</span>
-                    <h6 class="text-warning"><?php echo $stats['en_curso'] ?? 0; ?></h6>
+                    <h6 class="text-warning" id="stat-en-curso"><?php echo $stats['en_curso'] ?? 0; ?></h6>
                 </a>
             </div>
             <div class="col-md">
                 <a href="tickets_lista.php?estado=Resuelto" class="card-stat">
                     <span class="card-stat-title">RESUELTOS</span>
-                    <h6 class="text-success"><?php echo $stats['resueltos'] ?? 0; ?></h6>
+                    <h6 class="text-success" id="stat-resueltos"><?php echo $stats['resueltos'] ?? 0; ?></h6>
                 </a>
             </div>
             <div class="col-md">
                 <a href="tickets_lista.php?estado=Cerrado" class="card-stat">
                     <span class="card-stat-title">CERRADOS</span>
-                    <h6 style="color: #99247c !important;"><?php echo $stats['cerrados'] ?? 0; ?></h6>
+                    <h6 style="color: #99247c !important;" id="stat-cerrados"><?php echo $stats['cerrados'] ?? 0; ?></h6>
                 </a>
             </div>
         </div>
@@ -808,7 +808,6 @@ if($deptos_res) {
                     </div>`;
             }
 
-            // Si es administrador, se muestra el formulario editable. Si es técnico, se muestran los campos bloqueados / solo lectura.
             let contenidoFormularioHtml = '';
             if (esAdmin) {
                 contenidoFormularioHtml = `
@@ -863,7 +862,6 @@ if($deptos_res) {
                         </div>
                     </form>`;
             } else {
-                // Vista de solo lectura para técnicos (con acceso a capturas y archivos)
                 contenidoFormularioHtml = `
                     <div>
                         ${detalleResolucionHtml}
@@ -940,7 +938,7 @@ if($deptos_res) {
                     Swal.fire({ 
                         icon: 'success', 
                         title: 'TICKET ACTUALIZADO', 
-                        text: 'Los cambios de prioridad, tipo y textos fueron guardados.',
+                        text: 'Los cambios fueron guardados.',
                         customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' },
                         showConfirmButton: false, 
                         timer: 1500 
@@ -948,9 +946,6 @@ if($deptos_res) {
                 } else {
                     Swal.fire({ icon: 'error', title: 'Error', text: d.message, customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' } });
                 }
-            }).catch(e => {
-                console.error("Error en la solicitud:", e);
-                Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo procesar en el servidor.', customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' } });
             });
         }
 
@@ -1018,13 +1013,25 @@ if($deptos_res) {
             fetch('tickets_procesar.php', { method: 'POST', body: fd })
             .then(r => r.json()).then(d => { 
                 if(d.status === 'success') {
+                    // CAMBIO DINÁMICO DE CONTADORES SI EL BACKEND DEVUELVE LOS NUEVOS STATS
+                    if(d.stats) {
+                        document.getElementById('stat-total').innerText = d.stats.total;
+                        document.getElementById('stat-nuevos').innerText = d.stats.nuevos;
+                        document.getElementById('stat-en-curso').innerText = d.stats.en_curso;
+                        document.getElementById('stat-resueltos').innerText = d.stats.resueltos;
+                        document.getElementById('stat-cerrados').innerText = d.stats.cerrados;
+                    }
+
                     Swal.fire({ 
                         icon: 'success', 
                         title: 'ESTADO ACTUALIZADO', 
                         customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' },
                         showConfirmButton: false, 
-                        timer: 1200 
-                    }).then(() => location.reload());
+                        timer: 1000 
+                    }).then(() => {
+                        // Opcional: Recargar o actualizar la tarjeta en vivo sin recargar la página completa
+                        location.reload(); 
+                    });
                 } else {
                     Swal.fire({ icon: 'error', title: 'Error', text: d.message, customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' } });
                 }

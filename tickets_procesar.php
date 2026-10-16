@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $tecnico_id = $_POST['tecnico_id'];
             
-            $stmt = $conexion->prepare("UPDATE tickets SET tecnico_id = ?, estado = 'En Proceso', detalle_resolucion = NULL, fecha_limite = DATE_ADD(NOW(), INTERVAL 48 HOUR) WHERE id = ?");
+            $stmt = $conexion->prepare("UPDATE tickets SET tecnico_id = ?, estado = 'En curso', detalle_resolucion = NULL, fecha_limite = DATE_ADD(NOW(), INTERVAL 48 HOUR) WHERE id = ?");
             $stmt->bind_param("ii", $tecnico_id, $id);
             break;
 
@@ -126,13 +126,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // 3. Ejecución y respuesta
     if ($stmt && $stmt->execute()) {
-        echo json_encode(['status' => 'success']);
+        if ($stmt) $stmt->close();
+
+        // Calcular los nuevos contadores globales de tickets en tiempo real
+        $stats_res = $conexion->query("SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN estado = 'Nuevo' THEN 1 ELSE 0 END) as nuevos,
+            SUM(CASE WHEN estado = 'En curso' THEN 1 ELSE 0 END) as en_curso,
+            SUM(CASE WHEN estado = 'Resuelto' THEN 1 ELSE 0 END) as resueltos,
+            SUM(CASE WHEN estado = 'Cerrado' THEN 1 ELSE 0 END) as cerrados
+            FROM tickets");
+        $stats = $stats_res ? $stats_res->fetch_assoc() : null;
+
+        echo json_encode([
+            'status' => 'success',
+            'stats' => $stats
+        ]);
     } else {
         $errorMsg = $stmt ? $stmt->error : $conexion->error;
         echo json_encode(['status' => 'error', 'message' => 'Error en la base de datos: ' . $errorMsg]);
+        if ($stmt) $stmt->close();
     }
-    
-    if ($stmt) $stmt->close();
 
 } else {
     echo json_encode(['status' => 'error', 'message' => 'Método no permitido']);
