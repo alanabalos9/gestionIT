@@ -143,7 +143,7 @@ body {
         </button>
         <?php else: ?>
         <span class="badge bg-secondary bg-opacity-25 text-info px-3 py-2 border border-info border-opacity-25" style="font-size: 0.85rem;">
-            <i class="bi bi-eye me-1"></i> Modo Solo Lectura (Técnico)
+            <i class="bi bi-eye me-1"></i> Modo Solo Lectura (Técnico / Operativo)
         </span>
         <?php endif; ?>
     </div>

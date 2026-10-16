@@ -747,17 +747,6 @@ if($deptos_res) {
         updateTimers();
 
         function verDetalle(elemento) {
-            if (!esAdmin) {
-                Swal.fire({
-                    icon: 'info',
-                    title: 'MODO VISUALIZACIÓN',
-                    text: 'Los técnicos tienen acceso de solo lectura en el listado de tickets.',
-                    customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' },
-                    confirmButtonColor: '#38bdf8'
-                });
-                return;
-            }
-
             let ticket = {};
             try {
                 ticket = JSON.parse(elemento.getAttribute('data-ticket'));
@@ -819,12 +808,10 @@ if($deptos_res) {
                     </div>`;
             }
 
-            const htmlModal = `
-                <div class="modal-header border-bottom-0 pb-0" style="padding: 25px 25px 0 25px;">
-                    <h5 class="modal-title fw-bold text-white" style="font-family: 'Orbitron'; font-size: 1.1rem; letter-spacing:1px;">GESTIONAR TICKET #${ticket.id}</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body" style="padding: 25px;">
+            // Si es administrador, se muestra el formulario editable. Si es técnico, se muestran los campos bloqueados / solo lectura.
+            let contenidoFormularioHtml = '';
+            if (esAdmin) {
+                contenidoFormularioHtml = `
                     <form id="formEditarTicketBase" onsubmit="guardarCambiosTicketBase(event)">
                         <input type="hidden" name="id" value="${ticket.id}">
                         <input type="hidden" name="accion" value="editar_basico">
@@ -872,14 +859,63 @@ if($deptos_res) {
 
                         <div class="d-flex gap-2 pt-2">
                             <button type="submit" class="btn btn-info fw-bold w-100" style="border-radius: 12px; background: var(--accent); border: none; color: #0b0f1a; padding: 12px;"> GUARDAR CAMBIOS </button>
-                            <button type="button" class="btn btn-secondary w-100" data-bs-dismiss="modal" style="border-radius: 12px; background: transparent; border: 1px solid #475569; color: #94a3b8; padding: 12px;"> CANCELAR </button>
+                            <button type="button" class="btn btn-secondary w-100" data-bs-dismiss="modal" style="border-radius: 12px; background: transparent; border: 1px solid #475569; color: #94a3b8; padding: 12px;"> CERRAR </button>
                         </div>
-                    </form>
+                    </form>`;
+            } else {
+                // Vista de solo lectura para técnicos (con acceso a capturas y archivos)
+                contenidoFormularioHtml = `
+                    <div>
+                        ${detalleResolucionHtml}
+                        
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-secondary text-uppercase">Archivo Adjunto / Captura</label>
+                            <div class="p-3 text-center rounded-3" style="background: #0b0f1a; border: 1px solid rgba(255,255,255,0.05);">
+                                ${adjuntoHtml}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-secondary">TÍTULO / ASUNTO</label>
+                            <input type="text" class="form-control form-control-neo" value="${ticket.asunto}" disabled>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-secondary">DESCRIPCIÓN</label>
+                            <textarea class="form-control form-control-neo" rows="3" disabled style="font-size:0.9rem;">${ticket.descripcion}</textarea>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-secondary">TIPO</label>
+                                <input type="text" class="form-control form-control-neo" value="${ticket.tipo}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-secondary">PRIORIDAD</label>
+                                <input type="text" class="form-control form-control-neo" value="${ticket.prioridad}" disabled>
+                            </div>
+                        </div>
+
+                        <div class="d-flex pt-2">
+                            <button type="button" class="btn btn-secondary w-100" data-bs-dismiss="modal" style="border-radius: 12px; background: #1e293b; border: 1px solid #475569; color: #f8fafc; padding: 12px;"> CERRAR </button>
+                        </div>
+                    </div>`;
+            }
+
+            const htmlModal = `
+                <div class="modal-header border-bottom-0 pb-0" style="padding: 25px 25px 0 25px;">
+                    <h5 class="modal-title fw-bold text-white" style="font-family: 'Orbitron'; font-size: 1.1rem; letter-spacing:1px;">DETALLE DEL TICKET #${ticket.id}</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" style="padding: 25px;">
+                    ${contenidoFormularioHtml}
                 </div>`;
             
             $('#modalContent').html(htmlModal);
             (new bootstrap.Modal(document.getElementById('modalDetalle'))).show();
-            actualizarColorPrioridadModal();
+            if(esAdmin) {
+                actualizarColorPrioridadModal();
+            }
         }
 
         function actualizarColorPrioridadModal() {
