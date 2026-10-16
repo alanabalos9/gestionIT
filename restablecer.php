@@ -206,6 +206,34 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             pointer-events: none;
         }
 
+        /* OVERLAY DE CARGA GLOBAL CON SPINNER */
+        #global-loading-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(2, 6, 23, 0.85);
+            backdrop-filter: blur(10px);
+            z-index: 9999;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .spinner-neon {
+            width: 70px;
+            height: 70px;
+            border: 5px solid rgba(56, 189, 248, 0.2);
+            border-top: 5px solid var(--neon-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            box-shadow: 0 0 25px rgba(56, 189, 248, 0.5);
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         .card-reset {
             position: relative;
             z-index: 10;
@@ -287,6 +315,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             color: var(--neon-blue);
         }
 
+        /* Estilo para el botón del ojito */
+        .btn-toggle-password {
+            background: transparent;
+            border: none;
+            color: #64748b;
+            padding: 0 15px;
+            transition: 0.3s;
+        }
+        .btn-toggle-password:hover {
+            color: var(--neon-blue);
+        }
+
         .btn-cyber-primary {
             background: linear-gradient(90deg, #0284c7, var(--neon-blue));
             color: var(--deep-space);
@@ -345,6 +385,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 </head>
 <body>
 
+<!-- PANTALLA DE CARGA / SPINNER GLOBAL -->
+<div id="global-loading-overlay">
+    <div class="spinner-neon mb-3"></div>
+    <h5 class="text-info fw-bold tracking-widest" id="loading-text" style="font-family: 'Orbitron', sans-serif; letter-spacing: 3px;">PROCESANDO SOLICITUD...</h5>
+    <p class="text-white-50 small mt-1">Por favor, espere mientras el servidor responde.</p>
+</div>
+
 <div class="card-reset text-center">
     <div class="mb-4">
         <i class="bi bi-shield-lock text-white-50" style="font-size: 2.5rem; filter: drop-shadow(0 0 8px rgba(255,255,255,0.3));"></i>
@@ -387,9 +434,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
             <div class="mb-3 text-start">
                 <label class="form-label-cyber">NUEVA CONTRASEÑA</label>
-                <div class="input-group input-group-cyber form-control-cyber">
+                <div class="input-group input-group-cyber form-control-cyber align-items-center">
                     <span class="input-group-text"><i class="bi bi-key"></i></span>
                     <input type="password" id="nueva_password" name="nueva_password" class="form-control border-0 bg-transparent text-white p-0 ps-3" required placeholder="••••••••" maxlength="16">
+                    <button type="button" class="btn-toggle-password" onclick="togglePassword('nueva_password', 'icon_nueva_pass')">
+                        <i class="bi bi-eye-slash" id="icon_nueva_pass"></i>
+                    </button>
                 </div>
                 <div class="password-requirements">
                     <i class="bi bi-info-circle me-1"></i>Mínimo 8-16 caracteres, 1 mayúscula, 1 minúscula, 1 número y 1 símbolo especial.
@@ -397,9 +447,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
             <div class="mb-4 text-start">
                 <label class="form-label-cyber">CONFIRMAR CONTRASEÑA</label>
-                <div class="input-group input-group-cyber form-control-cyber">
+                <div class="input-group input-group-cyber form-control-cyber align-items-center">
                     <span class="input-group-text"><i class="bi bi-key-fill"></i></span>
                     <input type="password" id="confirmar_password" name="confirmar_password" class="form-control border-0 bg-transparent text-white p-0 ps-3" required placeholder="••••••••" maxlength="16">
+                    <button type="button" class="btn-toggle-password" onclick="togglePassword('confirmar_password', 'icon_confirm_pass')">
+                        <i class="bi bi-eye-slash" id="icon_confirm_pass"></i>
+                    </button>
                 </div>
             </div>
             <button type="submit" class="btn-cyber-primary">GUARDAR CAMBIOS</button>
@@ -409,42 +462,64 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const form = document.getElementById('resetForm');
-    if (!form) return;
-
-    const passInput = document.getElementById('nueva_password');
-    const confirmInput = document.getElementById('confirmar_password');
-    const alertBox = document.getElementById('js-alert');
-    const alertText = document.getElementById('js-alert-text');
-
-    // Mínimo 8 a 16 chars, 1 minúscula, 1 mayúscula, 1 número y 1 símbolo/carácter especial
-    const passPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$/;
-
-    form.addEventListener('submit', function (e) {
-        const pass = passInput.value;
-        const confirmPass = confirmInput.value;
-
-        if (pass !== confirmPass) {
-            e.preventDefault();
-            showAlert('Las contraseñas no coinciden.');
-            return;
+    // Función para alternar la visibilidad de las claves con el ojito
+    function togglePassword(idInput, idIcono) {
+        const input = document.getElementById(idInput);
+        const icono = document.getElementById(idIcono);
+        if (input.type === "password") {
+            input.type = "text";
+            icono.classList.remove("bi-eye-slash");
+            icono.classList.add("bi-eye");
+        } else {
+            input.type = "password";
+            icono.classList.remove("bi-eye");
+            icono.classList.add("bi-eye-slash");
         }
-
-        if (!passPattern.test(pass)) {
-            e.preventDefault();
-            showAlert('La contraseña debe tener entre 8 y 16 caracteres, incluir al menos 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial.');
-            return;
-        }
-
-        alertBox.classList.add('d-none');
-    });
-
-    function showAlert(msg) {
-        alertText.textContent = msg;
-        alertBox.classList.remove('d-none');
     }
-});
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('resetForm');
+        if (!form) return;
+
+        const passInput = document.getElementById('nueva_password');
+        const confirmInput = document.getElementById('confirmar_password');
+        const alertBox = document.getElementById('js-alert');
+        const alertText = document.getElementById('js-alert-text');
+        const loadingOverlay = document.getElementById('global-loading-overlay');
+
+        // Mínimo 8 a 16 chars, 1 minúscula, 1 mayúscula, 1 número y 1 símbolo/carácter especial
+        const passPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$/;
+
+        form.addEventListener('submit', function (e) {
+            const pass = passInput.value;
+            const confirmPass = confirmInput.value;
+
+            if (pass !== confirmPass) {
+                e.preventDefault();
+                showAlert('Las contraseñas no coinciden.');
+                return;
+            }
+
+            if (!passPattern.test(pass)) {
+                e.preventDefault();
+                showAlert('La contraseña debe tener entre 8 y 16 caracteres, incluir al menos 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial.');
+                return;
+            }
+
+            alertBox.classList.add('d-none');
+            
+            // Activar el círculo de carga global (spinner)
+            if (loadingOverlay) {
+                document.getElementById('loading-text').innerText = 'ACTUALIZANDO CREDENCIALES...';
+                loadingOverlay.style.display = 'flex';
+            }
+        });
+
+        function showAlert(msg) {
+            alertText.textContent = msg;
+            alertBox.classList.remove('d-none');
+        }
+    });
 </script>
 </body>
 </html>

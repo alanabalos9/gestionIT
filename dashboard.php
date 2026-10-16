@@ -2,6 +2,14 @@
 session_start();
 require_once 'db.php';
 
+// Importar clases de PHPMailer si se requiere para el envío (o asegurar disponibilidad del endpoint)
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+require 'PHPMailer/Exception.php';
+require 'PHPMailer/PHPMailer.php';
+require 'PHPMailer/SMTP.php';
+
 if (!isset($_SESSION['usuario'])) { 
     header("Location: index.php"); 
     exit(); 
@@ -10,6 +18,71 @@ if (!isset($_SESSION['usuario'])) {
 // Redirección forzada si la clave ya expiró (30 días cumplidos)
 if (isset($_SESSION['forzar_cambio_clave']) && $_SESSION['forzar_cambio_clave'] === true) {
     header("Location: perfil.php?expirado=1");
+    exit();
+}
+
+/**
+ * Función auxiliar para configurar y enviar correos desde la terminal de ayuda
+ */
+function enviarCorreo($destinatario, $asunto, $cuerpo, $replyTo = null) {
+    $mail = new PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host       = 'smtp.gmail.com'; 
+        $mail->SMTPAuth   = true;
+        $mail->Username   = 'testadministrador@gmail.com'; 
+        $mail->Password   = 'qybz utdg jdor lacj'; 
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = 587;
+        $mail->CharSet    = 'UTF-8';
+
+        $mail->setFrom('testadministrador@gmail.com', 'NEO ADMIN SYSTEM');
+        $mail->addAddress($destinatario); 
+
+        if ($replyTo) {
+            $mail->addReplyTo($replyTo);
+        }
+
+        $mail->isHTML(true);
+        $mail->Subject = $asunto;
+        $mail->Body    = $cuerpo;
+
+        $mail->send();
+        return true;
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+// ENDPOINT AJAX: ENVIAR CONSULTA DESDE LA TERMINAL DE AYUDA (BOT)
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_GET['action']) && $_GET['action'] == 'enviar_consulta_bot') {
+    ob_clean();
+    header('Content-Type: application/json');
+
+    $comentario = trim($_POST['comentario'] ?? '');
+    $email_usuario = trim($_POST['email'] ?? '');
+
+    if (empty($comentario) || empty($email_usuario) || !filter_var($email_usuario, FILTER_VALIDATE_EMAIL)) {
+        echo json_encode(['success' => false, 'message' => 'Datos incompletos o correo inválido.']);
+        exit();
+    }
+
+    $destinatario = 'testadministrador@gmail.com';
+    $asunto = 'terminal de ayuda';
+    $cuerpo = "<div style='font-family: sans-serif; padding: 25px; background: #0f172a; color: #ffffff; border-radius: 12px; border: 1px solid #38bdf8;'>
+                <h3 style='color: #38bdf8; margin-top: 0;'>Nueva Consulta - Terminal de Ayuda</h3>
+                <p><strong>Correo de contacto:</strong> {$email_usuario}</p>
+                <p><strong>Mensaje / Consulta:</strong></p>
+                <div style='background: #1e293b; padding: 15px; border-radius: 8px; color: #e2e8f0; font-size: 14px;'>
+                    " . nl2br(htmlspecialchars($comentario)) . "
+                </div>
+               </div>";
+
+    if (enviarCorreo($destinatario, $asunto, $cuerpo, $email_usuario)) {
+        echo json_encode(['success' => true]);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'No se pudo enviar el correo de soporte.']);
+    }
     exit();
 }
 
@@ -77,6 +150,34 @@ $dias_restantes_clave = $_SESSION['dias_restantes_clave'] ?? 30;
                 linear-gradient(rgba(56, 189, 248, 0.02) 1px, transparent 1px), 
                 linear-gradient(90deg, rgba(56, 189, 248, 0.02) 1px, transparent 1px);
             background-size: 50px 50px;
+        }
+
+        /* OVERLAY DE CARGA GLOBAL CON SPINNER */
+        #global-loading-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(2, 6, 23, 0.85);
+            backdrop-filter: blur(10px);
+            z-index: 9999;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .spinner-neon {
+            width: 70px;
+            height: 70px;
+            border: 5px solid rgba(56, 189, 248, 0.2);
+            border-top: 5px solid var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            box-shadow: 0 0 25px rgba(56, 189, 248, 0.5);
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         /* Navbar Superior */
@@ -254,6 +355,7 @@ $dias_restantes_clave = $_SESSION['dias_restantes_clave'] ?? 30;
             font-weight: 800; 
             display: flex; 
             justify-content: space-between; 
+            align-items: center;
         }
 
         @media (max-width: 992px) {
@@ -262,6 +364,13 @@ $dias_restantes_clave = $_SESSION['dias_restantes_clave'] ?? 30;
     </style>
 </head>
 <body>
+
+    <!-- PANTALLA DE CARGA / SPINNER GLOBAL -->
+    <div id="global-loading-overlay">
+        <div class="spinner-neon mb-3"></div>
+        <h5 class="text-info fw-bold tracking-widest" id="loading-text" style="font-family: 'Orbitron', sans-serif; letter-spacing: 3px;">PROCESANDO SOLICITUD...</h5>
+        <p class="text-white-50 small mt-1">Por favor, espere mientras el servidor responde.</p>
+    </div>
 
     <nav class="neo-navbar d-flex justify-content-between align-items-center sticky-top">
         <div class="d-flex align-items-center gap-3">
@@ -382,6 +491,7 @@ $dias_restantes_clave = $_SESSION['dias_restantes_clave'] ?? 30;
         </div>
     </main>
 
+    <!-- TERMINAL DE AYUDANTE (BOT) ESTILO INDEX.PHP -->
     <div class="support-bot-trigger" onclick="toggleBot()">
         <i class="bi bi-headset"></i>
     </div>
@@ -391,12 +501,30 @@ $dias_restantes_clave = $_SESSION['dias_restantes_clave'] ?? 30;
             <span>TERMINAL DE AYUDA</span>
             <i class="bi bi-x-lg" style="cursor:pointer" onclick="toggleBot()"></i>
         </div>
-        <div class="p-4">
-            <p class="small mb-4">¿En que podemos ayudarte? Notifique al administrador de guardia.</p>
-            <form action="index.php" method="POST">
-                <input type="email" name="email_soporte" class="form-control form-control-sm mb-3" placeholder="Correo corporativo" required>
-                <button type="submit" name="btn_soporte_bot" class="btn btn-dark w-100 fw-bold">ENVIAR REPORTE</button>
-            </form>
+        <div class="p-4" style="color: #475569;">
+            <div id="botPaso1">
+                <p class="small mb-2 fw-bold" style="color: #0f172a;">¿En qué podemos ayudarte?</p>
+                <p class="text-muted style-sm mb-3" style="font-size: 0.8rem;">Escribe a continuación tu consulta o la falla detectada:</p>
+                <textarea id="botComentario" class="form-control form-control-sm mb-3" rows="3" placeholder="Escribe tu mensaje aquí..." style="background: #f1f5f9; color: black; border: 1px solid #cbd5e1; border-radius: 10px; resize: none;"></textarea>
+                <button type="button" onclick="irAPaso2Bot()" class="btn btn-dark w-100 fw-bold" style="border-radius: 10px;">ENVIAR MENSAJE</button>
+            </div>
+
+            <div id="botPaso2" class="d-none">
+                <p class="small mb-2 fw-bold" style="color: #0f172a;">Correo de contacto</p>
+                <p class="text-muted style-sm mb-3" style="font-size: 0.8rem;">Ingresa la casilla de e-mail donde deseas recibir nuestra respuesta:</p>
+                <input type="email" id="botEmail" class="form-control form-control-sm mb-3" placeholder="tu-correo@dominio.com" style="background: #f1f5f9; color: black; border: 1px solid #cbd5e1; border-radius: 10px;">
+                <div class="d-flex gap-2">
+                    <button type="button" onclick="volverAPaso1Bot()" class="btn btn-outline-secondary btn-sm w-30" style="border-radius: 8px;">Atrás</button>
+                    <button type="button" id="btnEnviarBot" onclick="finalizarReporteBot()" class="btn btn-dark btn-sm w-70 fw-bold" style="border-radius: 8px;">CONFIRMAR Y ENVIAR</button>
+                </div>
+            </div>
+
+            <div id="botPaso3" class="d-none text-center py-3">
+                <i class="bi bi-check-circle-fill text-success" style="font-size: 2.5rem;"></i>
+                <h6 class="fw-bold mt-2 mb-1" style="color: #0f172a;">¡Reporte Enviado!</h6>
+                <p class="small text-muted mb-3">Recibirás una respuesta a la brevedad en tu correo electrónico.</p>
+                <button type="button" onclick="toggleBot()" class="btn btn-sm btn-outline-dark px-4" style="border-radius: 8px;">Cerrar</button>
+            </div>
         </div>
     </div>
 
@@ -404,7 +532,81 @@ $dias_restantes_clave = $_SESSION['dias_restantes_clave'] ?? 30;
     <script>
         function toggleBot() {
             const bot = document.getElementById('chatBot');
-            bot.style.display = (bot.style.display === 'block') ? 'none' : 'block';
+            if(bot.style.display === 'block') {
+                bot.style.display = 'none';
+            } else {
+                bot.style.display = 'block';
+                resetearBot();
+            }
+        }
+
+        function irAPaso2Bot() {
+            const txt = document.getElementById('botComentario').value.trim();
+            if (txt === '') {
+                alert('Por favor, escribe un comentario o mensaje antes de continuar.');
+                return;
+            }
+            document.getElementById('botPaso1').classList.add('d-none');
+            document.getElementById('botPaso2').classList.remove('d-none');
+        }
+
+        function volverAPaso1Bot() {
+            document.getElementById('botPaso2').classList.add('d-none');
+            document.getElementById('botPaso1').classList.remove('d-none');
+        }
+
+        function finalizarReporteBot() {
+            const txt = document.getElementById('botComentario').value.trim();
+            const email = document.getElementById('botEmail').value.trim();
+            
+            if (email === '' || !email.includes('@')) {
+                alert('Por favor, ingresa un correo electrónico válido para recibir la respuesta.');
+                return;
+            }
+
+            const btnEnviar = document.getElementById('btnEnviarBot');
+            btnEnviar.disabled = true;
+            btnEnviar.innerText = 'Enviando...';
+
+            const loadingOverlay = document.getElementById('global-loading-overlay');
+            document.getElementById('loading-text').innerText = 'ENVIANDO MENSAJE...';
+            loadingOverlay.style.display = 'flex';
+
+            const formData = new FormData();
+            formData.append('comentario', txt);
+            formData.append('email', email);
+
+            fetch('dashboard.php?action=enviar_consulta_bot', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                loadingOverlay.style.display = 'none';
+                btnEnviar.disabled = false;
+                btnEnviar.innerText = 'CONFIRMAR Y ENVIAR';
+
+                if (data.success) {
+                    document.getElementById('botPaso2').classList.add('d-none');
+                    document.getElementById('botPaso3').classList.remove('d-none');
+                } else {
+                    alert(data.message || 'Error al enviar la consulta. Intente nuevamente.');
+                }
+            })
+            .catch(err => {
+                loadingOverlay.style.display = 'none';
+                btnEnviar.disabled = false;
+                btnEnviar.innerText = 'CONFIRMAR Y ENVIAR';
+                alert('Error al conectar con el servidor.');
+            });
+        }
+
+        function resetearBot() {
+            document.getElementById('botComentario').value = '';
+            document.getElementById('botEmail').value = '';
+            document.getElementById('botPaso1').classList.remove('d-none');
+            document.getElementById('botPaso2').classList.add('d-none');
+            document.getElementById('botPaso3').classList.add('d-none');
         }
 
         document.addEventListener("DOMContentLoaded", function() {

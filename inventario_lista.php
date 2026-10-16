@@ -3,7 +3,7 @@ session_start();
 require_once 'db.php'; 
 
 /**
- * CONTROL DE ACCESO STRICTO
+ * CONTROL DE ACCESO ESTRICTO
  * Permite acceso únicamente a roles 'administrador' y 'tecnico'.
  * Si el rol no está autorizado, renderiza la pantalla "ACCESO DENEGADO".
  */
@@ -178,6 +178,13 @@ $usuarios_opciones = "";
 while($u = $res_usuarios_modal->fetch_assoc()){
     $area_attr = htmlspecialchars($u['area'] ?? '', ENT_QUOTES);
     $usuarios_opciones .= "<option value='{$u['id']}' data-sector='{$area_attr}'>{$u['nombre_completo']}</option>";
+}
+
+// Consulta para obtener dinámicamente las áreas/sectores limpios desde la base de datos
+$res_areas_select = $conexion->query("SELECT DISTINCT area FROM usuarios WHERE area IS NOT NULL AND area != '' ORDER BY area ASC");
+$opciones_sectores = "";
+while($ar = $res_areas_select->fetch_assoc()){
+    $nombre_area = htmlspecialchars($ar['area'], ENT_QUOTES);$opciones_sectores .= "<option value='{$nombre_area}'>{$nombre_area}</option>";
 }
 ?>
 
@@ -413,7 +420,7 @@ while($u = $res_usuarios_modal->fetch_assoc()){
                 <div class="col-md-3">
                     <select id="categoryFilter" class="form-select form-control-neo">
                         <option value="all">Todas las categorías</option>
-                        <?php while($cat_row = $res_categorias->fetch_assoc()): ?>
+                        <?php while($cat_row =$res_categorias->fetch_assoc()): ?>
                             <option value="<?php echo $cat_row['nombre']; ?>"><?php echo $cat_row['nombre']; ?></option>
                         <?php endwhile; ?>
                     </select>
@@ -423,15 +430,9 @@ while($u = $res_usuarios_modal->fetch_assoc()){
 
         <div class="row g-4" id="inventoryGrid">
             <?php 
-            while($row = $resultado->fetch_assoc()): 
-                $estado_actual = $row['estado'] ?: 'Disponible';
-                $st_comp = mb_strtolower($estado_actual, 'UTF-8');
-                
-                $st_class = "status-disponible"; 
-                if ($st_comp === 'asignado') {
-                    $st_class = "status-asignado";
-                } elseif (strpos($st_comp, 'repara') !== false) {
-                    $st_class = "status-reparacion";
+            while($row = $resultado->fetch_assoc()):$estado_actual = $row['estado'] ?: 'Disponible';$st_comp = mb_strtolower($estado_actual, 'UTF-8');$st_class = "status-disponible"; 
+                if ($st_comp === 'asignado') {$st_class = "status-asignado";
+                } elseif (strpos($st_comp, 'repara') !== false) {$st_class = "status-reparacion";
                 }
 
                 $search_data = strtolower($row['marca']." ".$row['modelo']." ".$row['codigo_patrimonial']." ".$row['sector']." ".$row['nombre_usuario']);
@@ -465,9 +466,14 @@ while($u = $res_usuarios_modal->fetch_assoc()){
 
                     <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top border-white border-opacity-10">
                         <span class="badge bg-secondary opacity-50"><?php echo htmlspecialchars($row['categoria_nombre']); ?></span>
-                        <button onclick='abrirModalEditar(<?php echo json_encode($row); ?>)' class="btn btn-sm btn-outline-info border-0">
-                            <i class="bi bi-pencil-square fs-5"></i>
-                        </button>
+                        <div class="d-flex gap-2">
+                            <button onclick='abrirModalEditar(<?php echo json_encode($row); ?>)' class="btn btn-sm btn-outline-info border-0" title="Editar">
+                                <i class="bi bi-pencil-square fs-5"></i>
+                            </button>
+                            <button onclick='eliminarEquipo(<?php echo $row['id']; ?>)' class="btn btn-sm btn-outline-danger border-0" title="Eliminar">
+                                <i class="bi bi-trash3 fs-5"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -490,26 +496,7 @@ while($u = $res_usuarios_modal->fetch_assoc()){
                             <label class="small text-secondary mb-1">SECTOR</label>
                             <select name="sector" id="edit_sector" class="form-select form-control-neo select-sector">
                                 <option value="">Sin definir / No aplica</option>
-                                <option value="Administración">Administración</option>
-                                <option value="Atención al Cliente">Atención al Cliente</option>
-                                <option value="Contabilidad">Contabilidad</option>
-                                <option value="Data Center">Data Center</option>
-                                <option value="Dirección General">Dirección General</option>
-                                <option value="Finanzas">Finanzas</option>
-                                <option value="Gerencia">Gerencia</option>
-                                <option value="Infraestructura">Infraestructura</option>
-                                <option value="Legales">Legales</option>
-                                <option value="Logística TI">Logística TI</option>
-                                <option value="Mesa de Entradas">Mesa de Entradas</option>
-                                <option value="Monitoreo de Red">Monitoreo de Red</option>
-                                <option value="Operaciones">Operaciones</option>
-                                <option value="Operaciones TI">Operaciones TI</option>
-                                <option value="Recepción">Recepción</option>
-                                <option value="Recursos Humanos">Recursos Humanos</option>
-                                <option value="Seguridad Informática">Seguridad Informática</option>
-                                <option value="Sistemas">Sistemas</option>
-                                <option value="Soporte Técnico">Soporte Técnico</option>
-                                <option value="Ventas">Ventas</option>
+                                <?php echo $opciones_sectores; ?>
                             </select>
                         </div>
                         <div class="mb-3">
@@ -527,7 +514,7 @@ while($u = $res_usuarios_modal->fetch_assoc()){
                                 <option value="Reparación">Reparación</option>
                             </select>
                         </div>
-                        <button type="submit" class="btn btn-info w-100 fw-bold mt-2">GUARDAR CAMBIOS</button>
+                        <button type="submit" id="btnEditarSubmit" class="btn btn-info w-100 fw-bold mt-2">GUARDAR CAMBIOS</button>
                     </form>
                 </div>
             </div>
@@ -551,7 +538,7 @@ while($u = $res_usuarios_modal->fetch_assoc()){
                                     <option value="" disabled selected>Seleccione una categoría</option>
                                     <?php 
                                     $res_cat_modal->data_seek(0);
-                                    while($cat = $res_cat_modal->fetch_assoc()): ?>
+                                    while($cat =$res_cat_modal->fetch_assoc()): ?>
                                         <option value="<?php echo $cat['id']; ?>"><?php echo $cat['nombre']; ?></option>
                                     <?php endwhile; ?>
                                 </select>
@@ -590,26 +577,7 @@ while($u = $res_usuarios_modal->fetch_assoc()){
                                 <label class="small text-secondary mb-1">SECTOR DEL EQUIPO</label>
                                 <select name="sector" id="nuevo_sector" class="form-select form-control-neo select-sector">
                                     <option value="" selected>Sin definir / No aplica</option>
-                                    <option value="Administración">Administración</option>
-                                    <option value="Atención al Cliente">Atención al Cliente</option>
-                                    <option value="Contabilidad">Contabilidad</option>
-                                    <option value="Data Center">Data Center</option>
-                                    <option value="Dirección General">Dirección General</option>
-                                    <option value="Finanzas">Finanzas</option>
-                                    <option value="Gerencia">Gerencia</option>
-                                    <option value="Infraestructura">Infraestructura</option>
-                                    <option value="Legales">Legales</option>
-                                    <option value="Logística TI">Logística TI</option>
-                                    <option value="Mesa de Entradas">Mesa de Entradas</option>
-                                    <option value="Monitoreo de Red">Monitoreo de Red</option>
-                                    <option value="Operaciones">Operaciones</option>
-                                    <option value="Operaciones TI">Operaciones TI</option>
-                                    <option value="Recepción">Recepción</option>
-                                    <option value="Recursos Humanos">Recursos Humanos</option>
-                                    <option value="Seguridad Informática">Seguridad Informática</option>
-                                    <option value="Sistemas">Sistemas</option>
-                                    <option value="Soporte Técnico">Soporte Técnico</option>
-                                    <option value="Ventas">Ventas</option>
+                                    <?php echo $opciones_sectores; ?>
                                 </select>
                             </div>
 
@@ -623,7 +591,7 @@ while($u = $res_usuarios_modal->fetch_assoc()){
                         </div>
 
                         <div class="mt-4">
-                            <button type="submit" class="btn btn-info w-100 fw-bold py-2" style="font-family: 'Orbitron'; letter-spacing: 1px;">
+                            <button type="submit" id="btnNuevoSubmit" class="btn btn-info w-100 fw-bold py-2" style="font-family: 'Orbitron'; letter-spacing: 1px;">
                                 GUARDAR EQUIPO
                             </button>
                         </div>
@@ -635,8 +603,10 @@ while($u = $res_usuarios_modal->fetch_assoc()){
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const modalEdit = new bootstrap.Modal(document.getElementById('modalEditar'));
-        const modalNuevo = new bootstrap.Modal(document.getElementById('modalNuevo'));
+        const modalEditElement = document.getElementById('modalEditar');
+        const modalNuevoElement = document.getElementById('modalNuevo');
+        const modalEdit = new bootstrap.Modal(modalEditElement);
+        const modalNuevo = new bootstrap.Modal(modalNuevoElement);
 
         function abrirModalEditar(data) {
             document.getElementById('edit_id').value = data.id;
@@ -715,34 +685,114 @@ while($u = $res_usuarios_modal->fetch_assoc()){
         inicializarVinculacion('#modalEditar');
         inicializarVinculacion('#modalNuevo');
 
-        document.getElementById('modalNuevo').addEventListener('show.bs.modal', function () {
+        modalNuevoElement.addEventListener('show.bs.modal', function () {
             document.getElementById('formNuevoEquipo').reset();
             filtrarUsuariosPorSector('#modalNuevo', '');
         });
 
+        // PROCESO EDITAR EQUIPO CON SPINNER Y NOTIFICACIÓN
         document.getElementById('formUpdateInventario').onsubmit = function(e) {
             e.preventDefault();
+            const btn = document.getElementById('btnEditarSubmit');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Guardando...`;
+
             fetch('inventario_update_proceso.php', { method: 'POST', body: new FormData(this) })
             .then(res => res.text()).then(data => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
                 if(data.trim() === "success") {
-                    location.reload();
+                    modalEdit.hide();
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Guardado exitoso!',
+                        text: 'Los cambios del equipo se guardaron correctamente.',
+                        timer: 1500,
+                        showConfirmButton: false
+                    }).then(() => {
+                        location.reload();
+                    });
                 } else {
                     Swal.fire('Error', data, 'error');
                 }
+            }).catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                Swal.fire('Error', 'Ocurrió un error en la conexión.', 'error');
             });
         };
 
+        // PROCESO NUEVO EQUIPO CON SPINNER Y NOTIFICACIÓN
         document.getElementById('formNuevoEquipo').onsubmit = function(e) {
             e.preventDefault();
+            const btn = document.getElementById('btnNuevoSubmit');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Guardando...`;
+
             fetch('inventario_insert_proceso.php', { method: 'POST', body: new FormData(this) })
             .then(res => res.text()).then(data => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
                 if(data.trim() === "success") {
-                    location.reload();
+                    modalNuevo.hide();
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Guardado exitoso!',
+                        text: 'El nuevo equipo fue registrado correctamente.',
+                        timer: 1500,
+                        showConfirmButton: false
+                    }).then(() => {
+                        location.reload();
+                    });
                 } else {
                     Swal.fire('Error', data, 'error');
                 }
+            }).catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                Swal.fire('Error', 'Ocurrió un error en la conexión.', 'error');
             });
         };
+
+        // FUNCIÓN ELIMINAR EQUIPO
+        function eliminarEquipo(id) {
+            Swal.fire({
+                title: '¿Estás seguro?',
+                text: "Esta acción eliminará el equipo del inventario de forma permanente.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#334155',
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const formData = new FormData();
+                    formData.append('id', id);
+
+                    fetch('inventario_eliminar_proceso.php', { method: 'POST', body: formData })
+                    .then(res => res.text()).then(data => {
+                        if(data.trim() === "success") {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Eliminado',
+                                text: 'El equipo fue eliminado correctamente.',
+                                timer: 1500,
+                                showConfirmButton: false
+                            }).then(() => {
+                                location.reload();
+                            });
+                        } else {
+                            Swal.fire('Error', data, 'error');
+                        }
+                    }).catch(err => {
+                        Swal.fire('Error', 'Ocurrió un error al intentar eliminar el equipo.', 'error');
+                    });
+                }
+            });
+        }
 
         // OBTIENE SÓLO LOS ELEMENTOS VISIBLES TRAS APLICAR FILTROS
         function obtenerDatosFiltrados() {

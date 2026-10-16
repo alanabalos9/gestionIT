@@ -507,6 +507,34 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
             pointer-events: none;
         }
 
+        /* OVERLAY DE CARGA GLOBAL CON SPINNER */
+        #global-loading-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(2, 6, 23, 0.85);
+            backdrop-filter: blur(10px);
+            z-index: 9999;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .spinner-neon {
+            width: 70px;
+            height: 70px;
+            border: 5px solid rgba(56, 189, 248, 0.2);
+            border-top: 5px solid var(--neon-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            box-shadow: 0 0 25px rgba(56, 189, 248, 0.5);
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         .login-card {
             position: relative;
             z-index: 10;
@@ -552,6 +580,22 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
         .form-select option {
             background: #0f172a;
             color: white;
+        }
+
+        /* Estilo para el botón del ojito en los inputs */
+        .input-group .btn-toggle-password {
+            background: rgba(2, 6, 23, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-left: none;
+            color: rgba(255, 255, 255, 0.6);
+            border-top-right-radius: 14px;
+            border-bottom-right-radius: 14px;
+            padding: 0 15px;
+            transition: 0.3s;
+        }
+        .input-group .btn-toggle-password:hover {
+            color: var(--neon-blue);
+            background: rgba(2, 6, 23, 0.95);
         }
 
         .btn-neon {
@@ -666,6 +710,13 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
 </head>
 <body>
 
+    <!-- PANTALLA DE CARGA / SPINNER GLOBAL -->
+    <div id="global-loading-overlay">
+        <div class="spinner-neon mb-3"></div>
+        <h5 class="text-info fw-bold tracking-widest" id="loading-text" style="font-family: 'Orbitron', sans-serif; letter-spacing: 3px;">PROCESANDO SOLICITUD...</h5>
+        <p class="text-white-50 small mt-1">Por favor, espere mientras el servidor responde.</p>
+    </div>
+
     <div class="login-card">
         <div class="text-center mb-5">
             <h1 class="logo-text h2 mb-1">NEO ADMIN</h1>
@@ -696,7 +747,10 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                 <label class="form-label small text-white-50 fw-bold ms-1">CONTRASEÑA</label>
                 <div class="input-group">
                     <span class="input-group-text bg-transparent border-0 text-white-50"><i class="bi bi-shield-lock"></i></span>
-                    <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+                    <input type="password" name="password" id="login_password" class="form-control border-end-0" placeholder="••••••••" required>
+                    <button type="button" class="btn btn-toggle-password" onclick="togglePassword('login_password', 'icon_login_pass')">
+                        <i class="bi bi-eye-slash" id="icon_login_pass"></i>
+                    </button>
                 </div>
             </div>
             
@@ -732,12 +786,22 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                     <form action="index.php" method="POST" onsubmit="return validarPasswordFront(this.nueva_password_expirada.value)">
                         <div class="mb-3">
                             <label class="form-label small text-white-50 fw-bold ms-1">NUEVA CONTRASEÑA</label>
-                            <input type="password" name="nueva_password_expirada" class="form-control" placeholder="••••••••" required pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$" title="Debe contener entre 8 y 16 caracteres, al menos una mayúscula, una minúscula, un número y un carácter especial.">
+                            <div class="input-group">
+                                <input type="password" name="nueva_password_expirada" id="exp_pass1" class="form-control border-end-0" placeholder="••••••••" required pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$" title="Debe contener entre 8 y 16 caracteres, al menos una mayúscula, una minúscula, un número y un carácter especial.">
+                                <button type="button" class="btn btn-toggle-password" onclick="togglePassword('exp_pass1', 'icon_exp1')">
+                                    <i class="bi bi-eye-slash" id="icon_exp1"></i>
+                                </button>
+                            </div>
                             <small class="d-block mt-1 fw-bold" style="color: #eab308; font-size: 0.72rem;">Mín. 8–16 caps, 1 mayúscula, 1 minúscula, 1 número y 1 especial.</small>
                         </div>
                         <div class="mb-4">
                             <label class="form-label small text-white-50 fw-bold ms-1">CONFIRMAR NUEVA CONTRASEÑA</label>
-                            <input type="password" name="confirmar_password_expirada" class="form-control" placeholder="••••••••" required>
+                            <div class="input-group">
+                                <input type="password" name="confirmar_password_expirada" id="exp_pass2" class="form-control border-end-0" placeholder="••••••••" required>
+                                <button type="button" class="btn btn-toggle-password" onclick="togglePassword('exp_pass2', 'icon_exp2')">
+                                    <i class="bi bi-eye-slash" id="icon_exp2"></i>
+                                </button>
+                            </div>
                         </div>
                         <button type="submit" name="btn_cambiar_clave_expirada" class="btn btn-danger w-100 py-3 fw-bold" style="border-radius: 14px; text-transform:uppercase; letter-spacing:1px;">Actualizar e Ingresar</button>
                     </form>
@@ -764,7 +828,12 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                         </div>
                         <div class="mb-4">
                             <label class="form-label small text-white-50 fw-bold ms-1">CONTRASEÑA DE CONFIRMACIÓN</label>
-                            <input type="password" name="admin_password" class="form-control text-center" placeholder="••••••••" required>
+                            <div class="input-group">
+                                <input type="password" name="admin_password" id="admin_pass" class="form-control text-center border-end-0" placeholder="••••••••" required>
+                                <button type="button" class="btn btn-toggle-password" onclick="togglePassword('admin_pass', 'icon_admin_pass')">
+                                    <i class="bi bi-eye-slash" id="icon_admin_pass"></i>
+                                </button>
+                            </div>
                         </div>
                         <button type="submit" name="btn_verificar_admin" class="btn btn-danger w-100 py-3 fw-bold" style="border-radius: 14px; text-transform:uppercase; letter-spacing:1px;">Validar Privilegios</button>
                     </form>
@@ -839,7 +908,12 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                             </div>
                             <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">CONTRASEÑA ASIGNADA</label>
-                                <input type="password" name="nueva_password" class="form-control" placeholder="••••••••" required pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$" title="Debe tener entre 8 y 16 caracteres, al menos una mayúscula, una minúscula, un número y un carácter especial.">
+                                <div class="input-group">
+                                    <input type="password" name="nueva_password" id="reg_password" class="form-control border-end-0" placeholder="••••••••" required pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$" title="Debe tener entre 8 y 16 caracteres, al menos una mayúscula, una minúscula, un número y un carácter especial.">
+                                    <button type="button" class="btn btn-toggle-password" onclick="togglePassword('reg_password', 'icon_reg_pass')">
+                                        <i class="bi bi-eye-slash" id="icon_reg_pass"></i>
+                                    </button>
+                                </div>
                                 <small class="d-block mt-1 fw-bold" style="color: #eab308; font-size: 0.72rem;">Mín. 8–16 caps, 1 mayúscula, 1 minúscula, 1 número y 1 especial.</small>
                             </div>
                             <div class="col-md-6 mb-4">
@@ -982,7 +1056,12 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                             </div>
                             <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">ASIGNAR NUEVA CONTRASEÑA (OPCIONAL)</label>
-                                <input type="password" name="nueva_password" class="form-control" placeholder="Dejar en blanco para no modificar" pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$" title="Debe tener entre 8 y 16 caracteres, al menos una mayúscula, una minúscula, un número y un carácter especial.">
+                                <div class="input-group">
+                                    <input type="password" name="nueva_password" id="edit_password" class="form-control border-end-0" placeholder="Dejar en blanco para no modificar" pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$" title="Debe tener entre 8 y 16 caracteres, al menos una mayúscula, una minúscula, un número y un carácter especial.">
+                                    <button type="button" class="btn btn-toggle-password" onclick="togglePassword('edit_password', 'icon_edit_pass')">
+                                        <i class="bi bi-eye-slash" id="icon_edit_pass"></i>
+                                    </button>
+                                </div>
                                 <small class="d-block mt-1 fw-bold" style="color: #eab308; font-size: 0.72rem;">Mín. 8–16 caps, 1 mayúscula, 1 minúscula, 1 número y 1 especial.</small>
                             </div>
                             <div class="col-md-6 mb-4">
@@ -1061,6 +1140,21 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Función para alternar la visibilidad de las contraseñas con el ícono del ojo
+        function togglePassword(idInput, idIcono) {
+            const input = document.getElementById(idInput);
+            const icono = document.getElementById(idIcono);
+            if (input.type === "password") {
+                input.type = "text";
+                icono.classList.remove("bi-eye-slash");
+                icono.classList.add("bi-eye");
+            } else {
+                input.type = "password";
+                icono.classList.remove("bi-eye");
+                icono.classList.add("bi-eye-slash");
+            }
+        }
+
         function validarPasswordFront(password) {
             const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,16}$/;
             if (!regex.test(password)) {
@@ -1108,6 +1202,10 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
             btnEnviar.disabled = true;
             btnEnviar.innerText = 'Enviando...';
 
+            const loadingOverlay = document.getElementById('global-loading-overlay');
+            document.getElementById('loading-text').innerText = 'ENVIANDO MENSAJE...';
+            loadingOverlay.style.display = 'flex';
+
             const formData = new FormData();
             formData.append('comentario', txt);
             formData.append('email', email);
@@ -1118,6 +1216,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
             })
             .then(res => res.json())
             .then(data => {
+                loadingOverlay.style.display = 'none';
                 btnEnviar.disabled = false;
                 btnEnviar.innerText = 'CONFIRMAR Y ENVIAR';
 
@@ -1129,6 +1228,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                 }
             })
             .catch(err => {
+                loadingOverlay.style.display = 'none';
                 btnEnviar.disabled = false;
                 btnEnviar.innerText = 'CONFIRMAR Y ENVIAR';
                 alert('Error al conectar con el servidor.');
@@ -1144,6 +1244,15 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
         }
 
         document.addEventListener("DOMContentLoaded", function() {
+            const todosLosFormularios = document.querySelectorAll('form');
+            todosLosFormularios.forEach(form => {
+                form.addEventListener('submit', function(e) {
+                    const loadingOverlay = document.getElementById('global-loading-overlay');
+                    document.getElementById('loading-text').innerText = 'PROCESANDO SOLICITUD...';
+                    loadingOverlay.style.display = 'flex';
+                });
+            });
+
             <?php if ($mostrar_modal_cambio_clave): ?>
                 var modalClave = new bootstrap.Modal(document.getElementById('modalClaveExpirada'));
                 modalClave.show();
@@ -1233,6 +1342,11 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                                     li.addEventListener('click', function() {
                                         idEditarTarget.value = u.id;
                                         listaResultadosEditar.classList.add('d-none');
+                                        
+                                        const loadingOverlay = document.getElementById('global-loading-overlay');
+                                        document.getElementById('loading-text').innerText = 'CARGANDO REGISTRO...';
+                                        loadingOverlay.style.display = 'flex';
+
                                         formConfirmarEditar.submit();
                                     });
                                     listaResultadosEditar.appendChild(li);
