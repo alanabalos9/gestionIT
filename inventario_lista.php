@@ -5,7 +5,6 @@ require_once 'db.php';
 /**
  * CONTROL DE ACCESO ESTRICTO
  * Permite acceso únicamente a roles 'administrador' y 'tecnico'.
- * Si el rol no está autorizado, renderiza la pantalla "ACCESO DENEGADO".
  */
 if (!isset($_SESSION['rol'])) {
     header("Location: login.php");
@@ -13,9 +12,10 @@ if (!isset($_SESSION['rol'])) {
 }
 
 $rol = $_SESSION['rol'];
-$roles_permitidos = ['administrador', 'tecnico'];
+$rol_lower = strtolower(trim($rol));
+$roles_permitidos = ['administrador', 'tecnico', 'técnico'];
 
-if (!in_array($rol, $roles_permitidos)) {
+if (!in_array($rol_lower, $roles_permitidos)) {
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -31,111 +31,35 @@ if (!in_array($rol, $roles_permitidos)) {
             --red-border: #f87171;
             --red-btn: #ef4444;
             --red-btn-hover: #dc2626;
-            --text-muted: #94a3b8;
         }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            background-color: var(--bg-dark);
-            font-family: 'Inter', sans-serif;
-            color: #ffffff;
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .access-card {
-            background-color: var(--card-bg);
-            border: 1px solid rgba(248, 113, 113, 0.3);
-            box-shadow: 0 0 25px rgba(239, 68, 68, 0.15);
-            border-radius: 16px;
-            padding: 40px 30px;
-            width: 100%;
-            max-width: 440px;
-            text-align: center;
-        }
-
-        .icon-wrapper {
-            width: 70px;
-            height: 70px;
-            border: 2px solid var(--red-border);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px auto;
-        }
-
-        .icon-wrapper svg {
-            width: 32px;
-            height: 32px;
-            stroke: var(--red-border);
-            stroke-width: 2.5;
-        }
-
-        .title {
-            font-family: 'Orbitron', sans-serif;
-            color: var(--red-border);
-            font-size: 1.25rem;
-            letter-spacing: 1.5px;
-            margin-bottom: 12px;
-        }
-
-        .message {
-            color: #e2e8f0;
-            font-size: 0.95rem;
-            line-height: 1.5;
-            margin-bottom: 25px;
-        }
-
-        .btn-action {
-            display: inline-block;
-            background-color: var(--red-btn);
-            color: #ffffff;
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 0.9rem;
-            padding: 10px 32px;
-            border-radius: 8px;
-            transition: background-color 0.2s ease, transform 0.1s ease;
-        }
-
-        .btn-action:hover {
-            background-color: var(--red-btn-hover);
-        }
-
-        .btn-action:active {
-            transform: scale(0.98);
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--bg-dark); font-family: 'Inter', sans-serif; color: #ffffff; height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .access-card { background-color: var(--card-bg); border: 1px solid rgba(248, 113, 113, 0.3); box-shadow: 0 0 25px rgba(239, 68, 68, 0.15); border-radius: 16px; padding: 40px 30px; width: 100%; max-width: 440px; text-align: center; }
+        .icon-wrapper { width: 70px; height: 70px; border: 2px solid var(--red-border); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; }
+        .icon-wrapper svg { width: 32px; height: 32px; stroke: var(--red-border); stroke-width: 2.5; }
+        .title { font-family: 'Orbitron', sans-serif; color: var(--red-border); font-size: 1.25rem; letter-spacing: 1.5px; margin-bottom: 12px; }
+        .message { color: #e2e8f0; font-size: 0.95rem; line-height: 1.5; margin-bottom: 25px; }
+        .btn-action { display: inline-block; background-color: var(--red-btn); color: #ffffff; text-decoration: none; font-weight: 600; font-size: 0.9rem; padding: 10px 32px; border-radius: 8px; transition: background-color 0.2s ease; }
+        .btn-action:hover { background-color: var(--red-btn-hover); }
     </style>
 </head>
 <body>
-
     <div class="access-card">
         <div class="icon-wrapper">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
         </div>
-        
         <h2 class="title">ACCESO DENEGADO</h2>
-        
         <p class="message">No tienes los permisos requeridos para ingresar a este panel.</p>
-        
         <a href="dashboard.php" class="btn-action">Entendido</a>
     </div>
-
 </body>
 </html>
 <?php
     exit();
 }
+
+// Determinar si es administrador (para habilitar o restringir controles de modificación)
+$es_admin = ($rol_lower === 'administrador');
 
 // OBTENER FOTO DE PERFIL DEL USUARIO
 $usuario_actual = $_SESSION['usuario'] ?? '';
@@ -184,7 +108,8 @@ while($u = $res_usuarios_modal->fetch_assoc()){
 $res_areas_select = $conexion->query("SELECT DISTINCT area FROM usuarios WHERE area IS NOT NULL AND area != '' ORDER BY area ASC");
 $opciones_sectores = "";
 while($ar = $res_areas_select->fetch_assoc()){
-    $nombre_area = htmlspecialchars($ar['area'], ENT_QUOTES);$opciones_sectores .= "<option value='{$nombre_area}'>{$nombre_area}</option>";
+    $nombre_area = htmlspecialchars($ar['area'], ENT_QUOTES);
+    $opciones_sectores .= "<option value='{$nombre_area}'>{$nombre_area}</option>";
 }
 ?>
 
@@ -385,13 +310,22 @@ while($ar = $res_areas_select->fetch_assoc()){
     <main class="main-content container-fluid">
         <div class="d-flex justify-content-between align-items-center mb-5">
             <h1 class="fw-bold mb-1" style="font-family: 'Orbitron';">INVENTARIO</h1>
+            <?php if (!$es_admin): ?>
+                <span class="badge bg-secondary bg-opacity-25 text-info px-3 py-2 border border-info border-opacity-25" style="font-size: 0.85rem;">
+                    <i class="bi bi-eye me-1"></i> Modo Solo Lectura (Técnico)
+                </span>
+            <?php endif; ?>
         </div>
 
         <div class="search-container">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-                <button type="button" class="btn btn-info fw-bold" data-bs-toggle="modal" data-bs-target="#modalNuevo">
-                    <i class="bi bi-plus-circle"></i> Nuevo Equipo
-                </button>
+                <?php if ($es_admin): ?>
+                    <button type="button" class="btn btn-info fw-bold" data-bs-toggle="modal" data-bs-target="#modalNuevo">
+                        <i class="bi bi-plus-circle"></i> Nuevo Equipo
+                    </button>
+                <?php else: ?>
+                    <div></div> <!-- Espaciador -->
+                <?php endif; ?>
 
                 <!-- DESPLEGABLE DESCARGAR REPORTE -->
                 <div class="dropdown">
@@ -466,14 +400,19 @@ while($ar = $res_areas_select->fetch_assoc()){
 
                     <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top border-white border-opacity-10">
                         <span class="badge bg-secondary opacity-50"><?php echo htmlspecialchars($row['categoria_nombre']); ?></span>
-                        <div class="d-flex gap-2">
-                            <button onclick='abrirModalEditar(<?php echo json_encode($row); ?>)' class="btn btn-sm btn-outline-info border-0" title="Editar">
-                                <i class="bi bi-pencil-square fs-5"></i>
-                            </button>
-                            <button onclick='eliminarEquipo(<?php echo $row['id']; ?>)' class="btn btn-sm btn-outline-danger border-0" title="Eliminar">
-                                <i class="bi bi-trash3 fs-5"></i>
-                            </button>
-                        </div>
+                        
+                        <?php if ($es_admin): ?>
+                            <div class="d-flex gap-2">
+                                <button onclick='abrirModalEditar(<?php echo json_encode($row); ?>)' class="btn btn-sm btn-outline-info border-0" title="Editar">
+                                    <i class="bi bi-pencil-square fs-5"></i>
+                                </button>
+                                <button onclick='eliminarEquipo(<?php echo $row['id']; ?>)' class="btn btn-sm btn-outline-danger border-0" title="Eliminar">
+                                    <i class="bi bi-trash3 fs-5"></i>
+                                </button>
+                            </div>
+                        <?php else: ?>
+                            <span class="text-secondary small fst-italic">Solo lectura</span>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -481,142 +420,148 @@ while($ar = $res_areas_select->fetch_assoc()){
         </div>
     </main>
 
-    <!-- MODAL EDITAR -->
-    <div class="modal fade" id="modalEditar" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content shadow-lg">
-                <div class="modal-header border-0">
-                    <h5 class="modal-title fw-bold" style="font-family: 'Orbitron';">EDITAR ASIGNACIÓN</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="formUpdateInventario">
-                        <input type="hidden" name="id" id="edit_id">
-                        <div class="mb-3">
-                            <label class="small text-secondary mb-1">SECTOR</label>
-                            <select name="sector" id="edit_sector" class="form-select form-control-neo select-sector">
-                                <option value="">Sin definir / No aplica</option>
-                                <?php echo $opciones_sectores; ?>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="small text-secondary mb-1">USUARIO ASIGNADO</label>
-                            <select name="usuario_id" id="edit_usuario" class="form-select form-control-neo select-usuario">
-                                <option value="">Sin asignar</option>
-                                <?php echo $usuarios_opciones; ?>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="small text-secondary mb-1">ESTADO</label>
-                            <select name="estado" id="edit_estado" class="form-select form-control-neo">
-                                <option value="Disponible">Disponible</option>
-                                <option value="Asignado">Asignado</option>
-                                <option value="Reparación">Reparación</option>
-                            </select>
-                        </div>
-                        <button type="submit" id="btnEditarSubmit" class="btn btn-info w-100 fw-bold mt-2">GUARDAR CAMBIOS</button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL NUEVO -->
-    <div class="modal fade" id="modalNuevo" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content shadow-lg">
-                <div class="modal-header border-0">
-                    <h5 class="modal-title fw-bold" style="font-family: 'Orbitron';">NUEVO EQUIPO</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="formNuevoEquipo">
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="small text-secondary mb-1">CATEGORÍA</label>
-                                <select name="tipo_id" class="form-select form-control-neo" required>
-                                    <option value="" disabled selected>Seleccione una categoría</option>
-                                    <?php 
-                                    $res_cat_modal->data_seek(0);
-                                    while($cat =$res_cat_modal->fetch_assoc()): ?>
-                                        <option value="<?php echo $cat['id']; ?>"><?php echo $cat['nombre']; ?></option>
-                                    <?php endwhile; ?>
+    <?php if ($es_admin): ?>
+        <!-- MODAL EDITAR (SOLO ADMINISTRADOR) -->
+        <div class="modal fade" id="modalEditar" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content shadow-lg">
+                    <div class="modal-header border-0">
+                        <h5 class="modal-title fw-bold" style="font-family: 'Orbitron';">EDITAR ASIGNACIÓN</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="formUpdateInventario">
+                            <input type="hidden" name="id" id="edit_id">
+                            <div class="mb-3">
+                                <label class="small text-secondary mb-1">SECTOR</label>
+                                <select name="sector" id="edit_sector" class="form-select form-control-neo select-sector">
+                                    <option value="">Sin definir / No aplica</option>
+                                    <?php echo $opciones_sectores; ?>
                                 </select>
                             </div>
-
-                            <div class="col-md-6">
-                                <label class="small text-secondary mb-1">CÓDIGO PATRIMONIAL</label>
-                                <input type="text" name="codigo_patrimonial" class="form-control form-control-neo" placeholder="Ej: NBK-2026-001" required>
+                            <div class="mb-3">
+                                <label class="small text-secondary mb-1">USUARIO ASIGNADO</label>
+                                <select name="usuario_id" id="edit_usuario" class="form-select form-control-neo select-usuario">
+                                    <option value="">Sin asignar</option>
+                                    <?php echo $usuarios_opciones; ?>
+                                </select>
                             </div>
-
-                            <div class="col-md-6">
-                                <label class="small text-secondary mb-1">MARCA</label>
-                                <input type="text" name="marca" class="form-control form-control-neo" placeholder="Ej: Dell, Lenovo..." required>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="small text-secondary mb-1">MODELO</label>
-                                <input type="text" name="modelo" class="form-control form-control-neo" placeholder="Ej: ThinkPad E14..." required>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="small text-secondary mb-1">NÚMERO DE SERIE (OPCIONAL)</label>
-                                <input type="text" name="serie" class="form-control form-control-neo" placeholder="Ej: BR549XF...">
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="small text-secondary mb-1">ESTADO INICIAL</label>
-                                <select name="estado" class="form-select form-control-neo" required>
-                                    <option value="Disponible" selected>Disponible</option>
+                            <div class="mb-3">
+                                <label class="small text-secondary mb-1">ESTADO</label>
+                                <select name="estado" id="edit_estado" class="form-select form-control-neo">
+                                    <option value="Disponible">Disponible</option>
                                     <option value="Asignado">Asignado</option>
                                     <option value="Reparación">Reparación</option>
                                 </select>
                             </div>
-
-                            <div class="col-md-6">
-                                <label class="small text-secondary mb-1">SECTOR DEL EQUIPO</label>
-                                <select name="sector" id="nuevo_sector" class="form-select form-control-neo select-sector">
-                                    <option value="" selected>Sin definir / No aplica</option>
-                                    <?php echo $opciones_sectores; ?>
-                                </select>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="small text-secondary mb-1">USUARIO ASIGNADO</label>
-                                <select name="usuario_id" id="nuevo_usuario" class="form-select form-control-neo select-usuario">
-                                    <option value="" selected>Sin asignar inicialmente</option>
-                                    <?php echo $usuarios_opciones; ?>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="mt-4">
-                            <button type="submit" id="btnNuevoSubmit" class="btn btn-info w-100 fw-bold py-2" style="font-family: 'Orbitron'; letter-spacing: 1px;">
-                                GUARDAR EQUIPO
-                            </button>
-                        </div>
-                    </form>
+                            <button type="submit" id="btnEditarSubmit" class="btn btn-info w-100 fw-bold mt-2">GUARDAR CAMBIOS</button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
+
+        <!-- MODAL NUEVO (SOLO ADMINISTRADOR) -->
+        <div class="modal fade" id="modalNuevo" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content shadow-lg">
+                    <div class="modal-header border-0">
+                        <h5 class="modal-title fw-bold" style="font-family: 'Orbitron';">NUEVO EQUIPO</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="formNuevoEquipo">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="small text-secondary mb-1">CATEGORÍA</label>
+                                    <select name="tipo_id" class="form-select form-control-neo" required>
+                                        <option value="" disabled selected>Seleccione una categoría</option>
+                                        <?php 
+                                        $res_cat_modal->data_seek(0);
+                                        while($cat =$res_cat_modal->fetch_assoc()): ?>
+                                            <option value="<?php echo $cat['id']; ?>"><?php echo $cat['nombre']; ?></option>
+                                        <?php endwhile; ?>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="small text-secondary mb-1">CÓDIGO PATRIMONIAL</label>
+                                    <input type="text" name="codigo_patrimonial" class="form-control form-control-neo" placeholder="Ej: NBK-2026-001" required>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="small text-secondary mb-1">MARCA</label>
+                                    <input type="text" name="marca" class="form-control form-control-neo" placeholder="Ej: Dell, Lenovo..." required>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="small text-secondary mb-1">MODELO</label>
+                                    <input type="text" name="modelo" class="form-control form-control-neo" placeholder="Ej: ThinkPad E14..." required>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="small text-secondary mb-1">NÚMERO DE SERIE (OPCIONAL)</label>
+                                    <input type="text" name="serie" class="form-control form-control-neo" placeholder="Ej: BR549XF...">
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="small text-secondary mb-1">ESTADO INICIAL</label>
+                                    <select name="estado" class="form-select form-control-neo" required>
+                                        <option value="Disponible" selected>Disponible</option>
+                                        <option value="Asignado">Asignado</option>
+                                        <option value="Reparación">Reparación</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="small text-secondary mb-1">SECTOR DEL EQUIPO</label>
+                                    <select name="sector" id="nuevo_sector" class="form-select form-control-neo select-sector">
+                                        <option value="" selected>Sin definir / No aplica</option>
+                                        <?php echo $opciones_sectores; ?>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="small text-secondary mb-1">USUARIO ASIGNADO</label>
+                                    <select name="usuario_id" id="nuevo_usuario" class="form-select form-control-neo select-usuario">
+                                        <option value="" selected>Sin asignar inicialmente</option>
+                                        <?php echo $usuarios_opciones; ?>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="mt-4">
+                                <button type="submit" id="btnNuevoSubmit" class="btn btn-info w-100 fw-bold py-2" style="font-family: 'Orbitron'; letter-spacing: 1px;">
+                                    GUARDAR EQUIPO
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const modalEditElement = document.getElementById('modalEditar');
-        const modalNuevoElement = document.getElementById('modalNuevo');
-        const modalEdit = new bootstrap.Modal(modalEditElement);
-        const modalNuevo = new bootstrap.Modal(modalNuevoElement);
+        const esAdmin = <?php echo $es_admin ? 'true' : 'false'; ?>;
 
-        function abrirModalEditar(data) {
-            document.getElementById('edit_id').value = data.id;
-            document.getElementById('edit_sector').value = data.sector || '';
-            
-            filtrarUsuariosPorSector('#modalEditar', data.sector || '', data.usuario_asignado_id || '');
-            
-            document.getElementById('edit_estado').value = data.estado || 'Disponible';
-            modalEdit.show();
-        }
+        <?php if ($es_admin): ?>
+            const modalEditElement = document.getElementById('modalEditar');
+            const modalNuevoElement = document.getElementById('modalNuevo');
+            const modalEdit = new bootstrap.Modal(modalEditElement);
+            const modalNuevo = new bootstrap.Modal(modalNuevoElement);
+
+            function abrirModalEditar(data) {
+                document.getElementById('edit_id').value = data.id;
+                document.getElementById('edit_sector').value = data.sector || '';
+                
+                filtrarUsuariosPorSector('#modalEditar', data.sector || '', data.usuario_asignado_id || '');
+                
+                document.getElementById('edit_estado').value = data.estado || 'Disponible';
+                modalEdit.show();
+            }
+        <?php endif; ?>
 
         function filter() {
             const text = document.getElementById('searchInput').value.toLowerCase();
@@ -682,117 +627,113 @@ while($ar = $res_areas_select->fetch_assoc()){
             });
         }
 
-        inicializarVinculacion('#modalEditar');
-        inicializarVinculacion('#modalNuevo');
+        <?php if ($es_admin): ?>
+            inicializarVinculacion('#modalEditar');
+            inicializarVinculacion('#modalNuevo');
 
-        modalNuevoElement.addEventListener('show.bs.modal', function () {
-            document.getElementById('formNuevoEquipo').reset();
-            filtrarUsuariosPorSector('#modalNuevo', '');
-        });
-
-        // PROCESO EDITAR EQUIPO CON SPINNER Y NOTIFICACIÓN
-        document.getElementById('formUpdateInventario').onsubmit = function(e) {
-            e.preventDefault();
-            const btn = document.getElementById('btnEditarSubmit');
-            const originalText = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Guardando...`;
-
-            fetch('inventario_update_proceso.php', { method: 'POST', body: new FormData(this) })
-            .then(res => res.text()).then(data => {
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-                if(data.trim() === "success") {
-                    modalEdit.hide();
-                    Swal.fire({
-                        icon: 'success',
-                        title: '¡Guardado exitoso!',
-                        text: 'Los cambios del equipo se guardaron correctamente.',
-                        timer: 1500,
-                        showConfirmButton: false
-                    }).then(() => {
-                        location.reload();
-                    });
-                } else {
-                    Swal.fire('Error', data, 'error');
-                }
-            }).catch(err => {
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-                Swal.fire('Error', 'Ocurrió un error en la conexión.', 'error');
+            modalNuevoElement.addEventListener('show.bs.modal', function () {
+                document.getElementById('formNuevoEquipo').reset();
+                filtrarUsuariosPorSector('#modalNuevo', '');
             });
-        };
 
-        // PROCESO NUEVO EQUIPO CON SPINNER Y NOTIFICACIÓN
-        document.getElementById('formNuevoEquipo').onsubmit = function(e) {
-            e.preventDefault();
-            const btn = document.getElementById('btnNuevoSubmit');
-            const originalText = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Guardando...`;
+            // PROCESO EDITAR EQUIPO CON SPINNER Y NOTIFICACIÓN
+            document.getElementById('formUpdateInventario').onsubmit = function(e) {
+                e.preventDefault();
+                const btn = document.getElementById('btnEditarSubmit');
+                const originalText = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Guardando...`;
 
-            fetch('inventario_insert_proceso.php', { method: 'POST', body: new FormData(this) })
-            .then(res => res.text()).then(data => {
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-                if(data.trim() === "success") {
-                    modalNuevo.hide();
-                    Swal.fire({
-                        icon: 'success',
-                        title: '¡Guardado exitoso!',
-                        text: 'El nuevo equipo fue registrado correctamente.',
-                        timer: 1500,
-                        showConfirmButton: false
-                    }).then(() => {
-                        location.reload();
-                    });
-                } else {
-                    Swal.fire('Error', data, 'error');
-                }
-            }).catch(err => {
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-                Swal.fire('Error', 'Ocurrió un error en la conexión.', 'error');
-            });
-        };
+                fetch('inventario_update_proceso.php', { method: 'POST', body: new FormData(this) })
+                .then(res => res.text()).then(data => {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                    if(data.trim() === "success") {
+                        modalEdit.hide();
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Guardado exitoso!',
+                            text: 'Los cambios del equipo se guardaron correctamente.',
+                            timer: 1500,
+                            showConfirmButton: false
+                        }).then(() => { location.reload(); });
+                    } else {
+                        Swal.fire('Error', data, 'error');
+                    }
+                }).catch(err => {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                    Swal.fire('Error', 'Ocurrió un error en la conexión.', 'error');
+                });
+            };
 
-        // FUNCIÓN ELIMINAR EQUIPO
-        function eliminarEquipo(id) {
-            Swal.fire({
-                title: '¿Estás seguro?',
-                text: "Esta acción eliminará el equipo del inventario de forma permanente.",
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#ef4444',
-                cancelButtonColor: '#334155',
-                confirmButtonText: 'Sí, eliminar',
-                cancelButtonText: 'Cancelar'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    const formData = new FormData();
-                    formData.append('id', id);
+            // PROCESO NUEVO EQUIPO CON SPINNER Y NOTIFICACIÓN
+            document.getElementById('formNuevoEquipo').onsubmit = function(e) {
+                e.preventDefault();
+                const btn = document.getElementById('btnNuevoSubmit');
+                const originalText = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Guardando...`;
 
-                    fetch('inventario_eliminar_proceso.php', { method: 'POST', body: formData })
-                    .then(res => res.text()).then(data => {
-                        if(data.trim() === "success") {
-                            Swal.fire({
-                                icon: 'success',
-                                title: 'Eliminado',
-                                text: 'El equipo fue eliminado correctamente.',
-                                timer: 1500,
-                                showConfirmButton: false
-                            }).then(() => {
-                                location.reload();
-                            });
-                        } else {
-                            Swal.fire('Error', data, 'error');
-                        }
-                    }).catch(err => {
-                        Swal.fire('Error', 'Ocurrió un error al intentar eliminar el equipo.', 'error');
-                    });
-                }
-            });
-        }
+                fetch('inventario_insert_proceso.php', { method: 'POST', body: new FormData(this) })
+                .then(res => res.text()).then(data => {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                    if(data.trim() === "success") {
+                        modalNuevo.hide();
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Guardado exitoso!',
+                            text: 'El nuevo equipo fue registrado correctamente.',
+                            timer: 1500,
+                            showConfirmButton: false
+                        }).then(() => { location.reload(); });
+                    } else {
+                        Swal.fire('Error', data, 'error');
+                    }
+                }).catch(err => {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                    Swal.fire('Error', 'Ocurrió un error en la conexión.', 'error');
+                });
+            };
+
+            // FUNCIÓN ELIMINAR EQUIPO
+            function eliminarEquipo(id) {
+                Swal.fire({
+                    title: '¿Estás seguro?',
+                    text: "Esta acción eliminará el equipo del inventario de forma permanente.",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#ef4444',
+                    cancelButtonColor: '#334155',
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        const formData = new FormData();
+                        formData.append('id', id);
+
+                        fetch('inventario_eliminar_proceso.php', { method: 'POST', body: formData })
+                        .then(res => res.text()).then(data => {
+                            if(data.trim() === "success") {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Eliminado',
+                                    text: 'El equipo fue eliminado correctamente.',
+                                    timer: 1500,
+                                    showConfirmButton: false
+                                }).then(() => { location.reload(); });
+                            } else {
+                                Swal.fire('Error', data, 'error');
+                            }
+                        }).catch(err => {
+                            Swal.fire('Error', 'Ocurrió un error al intentar eliminar el equipo.', 'error');
+                        });
+                    }
+                });
+            }
+        <?php endif; ?>
 
         // OBTIENE SÓLO LOS ELEMENTOS VISIBLES TRAS APLICAR FILTROS
         function obtenerDatosFiltrados() {
@@ -819,28 +760,23 @@ while($ar = $res_areas_select->fetch_assoc()){
         // EXPORTAR REPORTE FILTRADO A EXCEL
         function exportarExcel() {
             const data = obtenerDatosFiltrados();
-
             if (data.length === 0) {
                 Swal.fire('Atención', 'No hay registros visibles para exportar.', 'warning');
                 return;
             }
-
             const worksheet = XLSX.utils.json_to_sheet(data);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Inventario Filtrado");
-
             XLSX.writeFile(workbook, "Reporte_Inventario_Filtrado.xlsx");
         }
 
         // EXPORTAR REPORTE FILTRADO A PDF
         function exportarPDF() {
             const data = obtenerDatosFiltrados();
-
             if (data.length === 0) {
                 Swal.fire('Atención', 'No hay registros visibles para exportar.', 'warning');
                 return;
             }
-
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('landscape');
 

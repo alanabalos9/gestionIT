@@ -39,6 +39,14 @@ if (!empty($foto_db)) {
     }
 }
 
+// Consulta para obtener dinámicamente las áreas/sectores existentes en la base de datos
+$res_areas_select = $conexion->query("SELECT DISTINCT area FROM usuarios WHERE area IS NOT NULL AND area != '' ORDER BY area ASC");
+$opciones_sectores = "";
+while($ar = $res_areas_select->fetch_assoc()){
+    $nombre_area = htmlspecialchars($ar['area'], ENT_QUOTES);
+    $opciones_sectores .= "<option value='{$nombre_area}'>{$nombre_area}</option>";
+}
+
 // Lógica para el Bot de Soporte
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_soporte_bot'])) {
     $mail_usuario = $_POST['email_soporte'];
@@ -82,9 +90,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_crear_ticket'])) {
         $ruta_temporal = $_FILES['adjunto']['tmp_name'];
     }
 
-    // Consulta SQL adaptada para BLOB y los metadatos del archivo
+    // Consulta SQL adaptada para BLOB, metadatos y estado 'Nuevo' por defecto
     $sql = "INSERT INTO tickets (asunto, descripcion, prioridad, tipo, origen, archivo_adjunto, archivo_nombre, archivo_tipo, solicitante_id, estado) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Abierto')";
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Nuevo')";
     
     $stmt = $conexion->prepare($sql);
 
@@ -156,9 +164,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_crear_ticket'])) {
         }
 
         .form-container { max-width: 850px; margin: 40px auto; background: var(--card-dark); border: 1px solid var(--glass-border); border-radius: 25px; padding: 40px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
-        .form-control-neo { background: rgba(15, 23, 42, 0.8) !important; border: 1px solid var(--glass-border) !important; color: #ffffff !important; border-radius: 12px; padding: 12px; }
-        .form-control-neo:focus { box-shadow: 0 0 0 2px var(--accent-soft); border-color: var(--accent) !important; }
+        .form-control-neo, .form-select { background: rgba(15, 23, 42, 0.8) !important; border: 1px solid var(--glass-border) !important; color: #ffffff !important; border-radius: 12px; padding: 12px; }
+        .form-control-neo:focus, .form-select:focus { box-shadow: 0 0 0 2px var(--accent-soft); border-color: var(--accent) !important; color: white !important; }
         
+        .form-select option {
+            background: #0f172a;
+            color: white;
+        }
+
         .termometro-baja { color: #10b981 !important; } 
         .termometro-media { color: #f59e0b !important; } 
         .termometro-alta { color: #ef4444 !important; } 
@@ -236,19 +249,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_crear_ticket'])) {
                     <div class="col-md-5">
                         <div class="mb-3">
                             <label class="form-label small fw-bold text-secondary">TIPO DE SOLICITUD</label>
-                            <select name="tipo" class="form-select form-control-neo" required>
+                            <select name="tipo" class="form-select" required>
                                 <option value="Incidencia">Incidencia (Algo falló)</option>
                                 <option value="Solicitud">Solicitud (Nuevo requerimiento)</option>
                             </select>
                         </div>
                         <div class="mb-3">
                             <label class="form-label small fw-bold text-secondary">ORIGEN / DEPARTAMENTO</label>
-                            <select name="origen" class="form-select form-control-neo" required>
-                                <option value="Soporte">Soporte</option>
-                                <option value="Administración">Administración</option>
-                                <option value="Finanzas">Finanzas</option>
-                                <option value="Marketing">Marketing</option>
-                                <option value="Operaciones">Operaciones</option>
+                            <select name="origen" class="form-select" required>
+                                <option value="" disabled selected>Seleccione un área...</option>
+                                <?php echo $opciones_sectores; ?>
                             </select>
                         </div>
                         <div class="mb-3">
@@ -257,7 +267,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_crear_ticket'])) {
                                 <span class="input-group-text input-group-text-neo" id="termometro-icon">
                                     <i class="bi bi-thermometer-half termometro-media"></i>
                                 </span>
-                                <select name="prioridad" id="prioridadSelect" class="form-select form-control-neo" required onchange="actualizarColorPrioridad()">
+                                <select name="prioridad" id="prioridadSelect" class="form-select" required onchange="actualizarColorPrioridad()">
                                     <option value="Baja">Baja</option>
                                     <option value="Media" selected>Media</option>
                                     <option value="Alta">Alta (Crítica)</option>

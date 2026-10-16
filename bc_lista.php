@@ -11,7 +11,12 @@ if (!isset($_SESSION['usuario'])) {
 }
 
 $rol = $_SESSION['rol'] ?? 'operativo';
-$esPersonalTecnico = ($rol === 'administrador' || $rol === 'tecnico');
+$rol_lower = strtolower(trim($rol));
+
+// Permiso para visualizar contenido técnico/interno
+$esPersonalTecnico = ($rol_lower === 'administrador' || $rol_lower === 'tecnico' || $rol_lower === 'técnico');
+// Permiso exclusivo para crear y editar (Solo Administrador)
+$es_admin = ($rol_lower === 'administrador');
 
 // FOTO DE PERFIL
 $usuarioActual = $_SESSION['usuario'] ?? '';
@@ -34,7 +39,7 @@ if (!empty($fotoGuardada)) {
     }
 }
 
-// ARTÍCULOS: los usuarios operativos no ven contenido 'interno'
+// ARTÍCULOS: los usuarios operativos no ven contenido 'interno' (técnicos y admins sí pueden verlos)
 if ($esPersonalTecnico) {
     $consultaArticulos = "SELECT a.*, c.nombre AS categoria_nombre, c.icono AS categoria_icono
               FROM bc_articulos a
@@ -132,10 +137,14 @@ body {
 <main class="contenido-principal container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-5">
         <h1 class="fw-bold mb-1" style="font-family: 'Orbitron';">BASE DE CONOCIMIENTO</h1>
-        <?php if ($esPersonalTecnico): ?>
+        <?php if ($es_admin): ?>
         <button type="button" class="btn btn-info fw-bold" data-bs-toggle="modal" data-bs-target="#modalNuevoArticulo">
             <i class="bi bi-plus-circle"></i> Nuevo Artículo
         </button>
+        <?php else: ?>
+        <span class="badge bg-secondary bg-opacity-25 text-info px-3 py-2 border border-info border-opacity-25" style="font-size: 0.85rem;">
+            <i class="bi bi-eye me-1"></i> Modo Solo Lectura (Técnico)
+        </span>
         <?php endif; ?>
     </div>
 
@@ -173,7 +182,7 @@ body {
                     <span class="badge bg-secondary opacity-50"><?php echo htmlspecialchars($articulo['categoria_nombre'] ?? 'Sin categoría'); ?></span>
                     <div class="d-flex align-items-center gap-3">
                         <span class="small text-secondary"><i class="bi bi-eye"></i> <?php echo (int)$articulo['vistas']; ?></span>
-                        <?php if ($esPersonalTecnico):
+                        <?php if ($es_admin):
                             $datosArticuloJson = htmlspecialchars(json_encode([
                                 'id' => $articulo['id'],
                                 'titulo' => $articulo['titulo'],
@@ -194,8 +203,8 @@ body {
     </div>
 </main>
 
-<?php if ($esPersonalTecnico): ?>
-<!-- MODAL NUEVO ARTÍCULO -->
+<?php if ($es_admin): ?>
+<!-- MODAL NUEVO ARTÍCULO (SOLO ADMINISTRADOR) -->
 <div class="modal fade" id="modalNuevoArticulo" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content shadow-lg">
@@ -240,7 +249,7 @@ body {
     </div>
 </div>
 
-<!-- MODAL EDITAR ARTÍCULO -->
+<!-- MODAL EDITAR ARTÍCULO (SOLO ADMINISTRADOR) -->
 <div class="modal fade" id="modalEditarArticulo" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content shadow-lg">
@@ -299,7 +308,7 @@ function filtrar() {
 document.getElementById('entradaBusqueda').addEventListener('input', filtrar);
 document.getElementById('filtroCategoria').addEventListener('change', filtrar);
 
-<?php if ($esPersonalTecnico): ?>
+<?php if ($es_admin): ?>
 document.getElementById('formularioNuevoArticulo').onsubmit = function (evento) {
     evento.preventDefault();
     fetch('bc_insertar_proceso.php', { method: 'POST', body: new FormData(this) })

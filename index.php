@@ -63,6 +63,14 @@ function enviarCorreo($destinatario, $asunto, $cuerpo, $replyTo = null) {
     }
 }
 
+// Consulta para obtener dinámicamente las áreas/sectores existentes en la base de datos
+$res_areas_select = $conexion->query("SELECT DISTINCT area FROM usuarios WHERE area IS NOT NULL AND area != '' ORDER BY area ASC");
+$opciones_sectores = "";
+while($ar = $res_areas_select->fetch_assoc()){
+    $nombre_area = htmlspecialchars($ar['area'], ENT_QUOTES);
+    $opciones_sectores .= "<option value='{$nombre_area}'>{$nombre_area}</option>";
+}
+
 // ENDPOINT AJAX: ENVIAR CONSULTA DESDE LA TERMINAL DE AYUDA (BOT)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_GET['action']) && $_GET['action'] == 'enviar_consulta_bot') {
     ob_clean();
@@ -274,10 +282,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_registrar_usuario'
     }
 }
 
-// LÓGICA DE BAJA DE USUARIO
+// LÓGICA DE BAJA DE USUARIO (Con limpieza previa de dependencias en tickets para evitar errores de clave foránea)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_baja_usuario'])) {
     $id_baja = $_POST['id_baja'];
     
+    // 1. Liberar los tickets donde este usuario era el técnico asignado
+    $stmt_liberar_tec = $conexion->prepare("UPDATE tickets SET tecnico_id = NULL WHERE tecnico_id = ?");
+    $stmt_liberar_tec->bind_param("i", $id_baja);
+    $stmt_liberar_tec->execute();
+
+    // 2. Liberar o eliminar tickets donde este usuario era el solicitante (si aplica en tu diseño)
+    $stmt_liberar_sol = $conexion->prepare("UPDATE tickets SET solicitante_id = NULL WHERE solicitante_id = ?");
+    $stmt_liberar_sol->bind_param("i", $id_baja);
+    $stmt_liberar_sol->execute();
+
+    // 3. Proceder a eliminar al usuario de la base de datos con seguridad
     $stmt_del = $conexion->prepare("DELETE FROM usuarios WHERE id = ?");
     $stmt_del->bind_param("i", $id_baja);
     
@@ -896,7 +915,10 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                             </div>
                             <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">ÁREA / DEPARTAMENTO</label>
-                                <input type="text" name="area" class="form-control" placeholder="Ej: Soporte TI / Infraestructura" required>
+                                <select name="area" class="form-select" required>
+                                    <option value="" disabled selected>Seleccione un área...</option>
+                                    <?php echo $opciones_sectores; ?>
+                                </select>
                             </div>
                             <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">ROL DEL SISTEMA</label>
@@ -1044,7 +1066,16 @@ if (isset($_GET['action']) && $_GET['action'] == 'buscar_nodo_editar' && isset($
                             </div>
                             <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">ÁREA / DEPARTAMENTO</label>
-                                <input type="text" name="area" class="form-control" value="<?php echo htmlspecialchars($usuario_a_editar['area']); ?>" required>
+                                <select name="area" class="form-select" required>
+                                    <option value="" disabled>Seleccione un área...</option>
+                                    <?php 
+                                    $res_areas_edit = $conexion->query("SELECT DISTINCT area FROM usuarios WHERE area IS NOT NULL AND area != '' ORDER BY area ASC");
+                                    while($ar_ed = $res_areas_edit->fetch_assoc()){
+                                        $sel = ($usuario_a_editar['area'] == $ar_ed['area']) ? 'selected' : '';
+                                        echo "<option value='".htmlspecialchars($ar_ed['area'], ENT_QUOTES)."' {$sel}>".htmlspecialchars($ar_ed['area'], ENT_QUOTES)."</option>";
+                                    }
+                                    ?>
+                                </select>
                             </div>
                             <div class="col-md-6 mb-4">
                                 <label class="form-label small text-white-50 fw-bold">ROL DEL SISTEMA</label>

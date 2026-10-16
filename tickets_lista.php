@@ -11,8 +11,11 @@ if (!isset($_SESSION['usuario'])) {
 $usuario_id = $_SESSION['usuario_id'];
 $rol = $_SESSION['rol'];
 
-// 2. RESTRICCIÓN DE ACCESO: Si NO es administrador NI técnico, denegar acceso con SweetAlert
-if ($rol !== 'administrador' && $rol !== 'tecnico') {
+// Normalizar rol para validaciones exactas
+$rol_lower = strtolower(trim($rol));
+
+// 2. RESTRICCIÓN DE ACCESO: Si NO es administrador NI técnico, denegar acceso
+if ($rol_lower !== 'administrador' && $rol_lower !== 'tecnico' && $rol_lower !== 'técnico') {
     ?>
     <!DOCTYPE html>
     <html lang="es">
@@ -52,6 +55,9 @@ if ($rol !== 'administrador' && $rol !== 'tecnico') {
     <?php
     exit();
 }
+
+// Determinar si es administrador (para habilitar o restringir edición en vistas)
+$es_admin = ($rol_lower === 'administrador');
 
 // OBTENER FOTO DE PERFIL DEL USUARIO
 $usuario_actual = $_SESSION['usuario'] ?? '';
@@ -168,9 +174,13 @@ if (!empty($buscar)) {
 $sql .= " ORDER BY t.fecha_creacion DESC";
 $res = $conexion->query($sql);
 
-$tecnicos_res = $conexion->query("SELECT id, nombre_completo FROM usuarios WHERE rol = 'tecnico'");
+$tecnicos_res = $conexion->query("SELECT id, nombre_completo FROM usuarios WHERE LOWER(TRIM(rol)) IN ('tecnico', 'técnico', 'tecnicos')");
 $tecnicos = [];
-while ($t = $tecnicos_res->fetch_assoc()) { $tecnicos[] = $t; }
+if($tecnicos_res) {
+    while ($t = $tecnicos_res->fetch_assoc()) { 
+        $tecnicos[] = $t; 
+    }
+}
 
 $deptos_res = $conexion->query("SELECT DISTINCT area FROM usuarios WHERE area IS NOT NULL AND area != ''");
 $departamentos = [];
@@ -396,7 +406,7 @@ if($deptos_res) {
             <div class="col-md">
                 <a href="tickets_lista.php?estado=Cerrado" class="card-stat">
                     <span class="card-stat-title">CERRADOS</span>
-                    <h6 class="text-muted"><?php echo $stats['cerrados'] ?? 0; ?></h6>
+                    <h6 style="color: #99247c !important;"><?php echo $stats['cerrados'] ?? 0; ?></h6>
                 </a>
             </div>
         </div>
@@ -518,11 +528,21 @@ if($deptos_res) {
                         <a href="javascript:void(0)" onclick="verDetalle(this)" data-ticket="<?php echo $ticketJsonSeguro; ?>" class="text-info small text-decoration-none fw-bold">Detalles ></a>
                     </div>
 
-                    <div class="btn-action-group">
-                        <div onclick="asignarTicket(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-person-plus text-info"></i><span>Asignar</span></div>
-                        <div onclick="extenderTiempo(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-clock-history text-primary"></i><span>+Tiempo</span></div>
-                        <div onclick="resolverTicket(<?php echo $row['id']; ?>, '<?php echo htmlspecialchars($row['estado'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes($row['detalle_resolucion'] ?? ''), ENT_QUOTES); ?>')" class="btn-action-card"><i class="bi bi-check2-circle text-success"></i><span>Estado</span></div>
-                    </div>
+                    <?php if ($es_admin): ?>
+                        <!-- ACCIONES DE EDICIÓN EXCLUSIVAS PARA ADMINISTRADORES -->
+                        <div class="btn-action-group">
+                            <div onclick="asignarTicket(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-person-plus text-info"></i><span>Asignar</span></div>
+                            <div onclick="extenderTiempo(<?php echo $row['id']; ?>)" class="btn-action-card"><i class="bi bi-clock-history text-primary"></i><span>+Tiempo</span></div>
+                            <div onclick="resolverTicket(<?php echo $row['id']; ?>, '<?php echo htmlspecialchars($row['estado'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes($row['detalle_resolucion'] ?? ''), ENT_QUOTES); ?>')" class="btn-action-card"><i class="bi bi-check2-circle text-success"></i><span>Estado</span></div>
+                        </div>
+                    <?php else: ?>
+                        <!-- VISTA DE SOLO LECTURA PARA TÉCNICOS -->
+                        <div class="mt-3 text-center">
+                            <span class="badge bg-secondary bg-opacity-10 text-secondary w-100 py-2 border border-secondary border-opacity-25" style="font-size: 0.75rem;">
+                                <i class="bi bi-eye me-1"></i> Modo Solo Lectura
+                            </span>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
             <?php endwhile; ?>
@@ -544,6 +564,7 @@ if($deptos_res) {
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script>
+        const esAdmin = <?php echo $es_admin ? 'true' : 'false'; ?>;
         const rawChartMes = <?php echo json_encode($chart_mes); ?>;
         const rawChartAnio = <?php echo json_encode($chart_anio); ?>;
         const rawChartHist = {
@@ -569,7 +590,7 @@ if($deptos_res) {
                 const values = [dataSource.Nuevo, dataSource['En curso'], dataSource.Resuelto, dataSource.Cerrado];
                 const total = values.reduce((a, b) => a + b, 0);
 
-                const bgColors = ['#38bdf8', '#fbbf24', '#10b981', '#64748b'];
+                const bgColors = ['#38bdf8', '#fbbf24', '#10b981', '#99247c'];
 
                 activeChart = new Chart(ctx, {
                     type: 'doughnut',
@@ -579,7 +600,7 @@ if($deptos_res) {
                             data: values,
                             backgroundColor: bgColors,
                             borderWidth: 2,
-                            borderColor: '#161c2d'
+                            borderColor: '#2d161b'
                         }]
                     },
                     options: {
@@ -627,7 +648,7 @@ if($deptos_res) {
                         maintainAspectRatio: false,
                         scales: {
                             x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
-                            y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                            y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(177, 36, 135, 0.05)' } }
                         },
                         plugins: {
                             legend: { position: 'bottom', labels: { color: '#f8fafc', font: { family: 'Inter', size: 11 } } }
@@ -726,6 +747,17 @@ if($deptos_res) {
         updateTimers();
 
         function verDetalle(elemento) {
+            if (!esAdmin) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'MODO VISUALIZACIÓN',
+                    text: 'Los técnicos tienen acceso de solo lectura en el listado de tickets.',
+                    customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' },
+                    confirmButtonColor: '#38bdf8'
+                });
+                return;
+            }
+
             let ticket = {};
             try {
                 ticket = JSON.parse(elemento.getAttribute('data-ticket'));
@@ -860,6 +892,7 @@ if($deptos_res) {
 
         function guardarCambiosTicketBase(e) {
             if(e) e.preventDefault();
+            if (!esAdmin) return;
             const formulario = document.getElementById('formEditarTicketBase');
             if (!formulario.reportValidity()) return;
 
@@ -886,6 +919,7 @@ if($deptos_res) {
         }
 
         async function extenderTiempo(id) {
+            if(!esAdmin) return;
             const { value: horas } = await Swal.fire({
                 title: 'EXTENDER PLAZO',
                 input: 'select',
@@ -897,17 +931,29 @@ if($deptos_res) {
         }
 
         async function asignarTicket(id) {
+            if(!esAdmin) return;
             const { value: tId } = await Swal.fire({
                 title: 'ASIGNAR TÉCNICO',
                 input: 'select',
-                inputOptions: { <?php foreach($tecnicos as$t) echo "'{$t['id']}': '".addslashes($t['nombre_completo'])."',"; ?> },
+                inputOptions: {
+                    <?php 
+                    $opciones_js = [];
+                    foreach($tecnicos as $t) {$opciones_js[] = "'" . $t['id'] . "': " . json_encode($t['nombre_completo']);
+                    }
+                    echo implode(",\n", $opciones_js);
+                    ?>
+                },
+                inputPlaceholder: 'Seleccione un técnico...',
                 customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title', input: 'neo-swal-select' },
-                confirmButtonColor: '#38bdf8', showCancelButton: true, cancelButtonColor: '#475569'
+                confirmButtonColor: '#38bdf8', 
+                showCancelButton: true, 
+                cancelButtonColor: '#475569'
             });
             if (tId) enviarAccion({ id, tecnico_id: tId, accion: 'asignar' });
         }
 
         async function resolverTicket(id, estadoActual = 'En curso', detallePrevio = '') {
+            if(!esAdmin) return;
             const { value: f } = await Swal.fire({
                 title: 'CAMBIAR ESTADO DEL TICKET',
                 customClass: { popup: 'neo-swal-popup', title: 'neo-swal-title' },
@@ -930,6 +976,7 @@ if($deptos_res) {
         }
 
         function enviarAccion(datos) {
+            if(!esAdmin) return;
             const fd = new FormData();
             for (let k in datos) fd.append(k, datos[k]);
             fetch('tickets_procesar.php', { method: 'POST', body: fd })
